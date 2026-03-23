@@ -86,6 +86,10 @@ lib/
 - Flutter 3.22.1-ohos-1.0.1（鸿蒙兼容版本）
 - Dart SDK >= 3.4.0
 
+## 后端 API（可选）
+
+本地跑 `server/` 时，MySQL 账号与 `server/configs/config.yaml` 默认不一致：复制 `server/configs/config.local.example.yaml` 为 **`server/configs/config.local.yaml`** 并填写 `database`（该文件已加入 `.gitignore`）。**首次**若报库不存在，在项目根执行：`mysql -u root -p < server/migrations/001_init.sql`。详见 `doc/moment_debug.md`。
+
 ## 快速开始
 
 ```bash

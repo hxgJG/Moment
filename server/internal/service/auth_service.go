@@ -49,10 +49,11 @@ type RefreshRequest struct {
 
 // TokenResponse Token响应
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenType    string       `json:"token_type"`
+	ExpiresIn    int          `json:"expires_in"`
+	User         *model.User  `json:"user"`
 }
 
 // Register 注册
@@ -151,5 +152,6 @@ func (s *AuthService) generateTokenResponse(user *model.User) (*TokenResponse, e
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    7200,
+		User:         user,
 	}, nil
 }

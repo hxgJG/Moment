@@ -7,6 +7,7 @@ app:
   mode: "debug"  # debug, release, test
   env: "development"
 
+# 本机账号与仓库默认不一致时：复制 config.local.example.yaml 为 config.local.yaml 并只填 database（见该示例文件）
 database:
   driver: "mysql"
   host: "localhost"

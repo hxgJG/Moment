@@ -1,0 +1,6 @@
+# 用法：复制本文件为同目录下的 config.local.yaml，填写本机 MySQL 账号。
+# config.local.yaml 已被 .gitignore，不会提交仓库。
+
+database:
+  username: "root"
+  password: "hxgo00"

@@ -9,9 +9,11 @@ import 'screens/add_moment_screen.dart';
 import 'screens/moment_detail_screen.dart';
 import 'screens/edit_moment_screen.dart';
 import 'screens/login_screen.dart';
+import 'sqflite_platform.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initSqfliteForPlatform();
   runApp(const MomentApp());
 }
 

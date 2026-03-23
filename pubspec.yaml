@@ -39,6 +39,7 @@ dependencies:
 
   # 数据库
   sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.3
   path_provider: ^2.1.1
   path: ^1.8.3
 

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
 import '../services/storage_service.dart';
@@ -51,6 +52,39 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 后端统一包一层 `{ code, msg, data }`，且错误时 HTTP 也可能为 200
+  bool _applyAuthEnvelope(dynamic raw) {
+    if (raw == null) {
+      _error = '服务器响应数据为空 (CORS 或网络问题)';
+      return false;
+    }
+    if (raw is! Map) {
+      _error = '响应格式错误';
+      return false;
+    }
+    final body = Map<String, dynamic>.from(raw);
+    final code = body['code'];
+    if (code != 200) {
+      _error = body['msg']?.toString() ?? '请求失败';
+      return false;
+    }
+    final data = body['data'];
+    if (data is! Map) {
+      _error = '响应缺少 data';
+      return false;
+    }
+    final dataMap = Map<String, dynamic>.from(data);
+    final token = dataMap['access_token'] as String?;
+    final userRaw = dataMap['user'];
+    if (token == null || userRaw is! Map) {
+      _error = '登录/注册数据不完整';
+      return false;
+    }
+    _accessToken = token;
+    _user = User.fromJson(Map<String, dynamic>.from(userRaw));
+    return true;
+  }
+
   /// 登录
   Future<bool> login({
     required String username,
@@ -66,25 +100,23 @@ class AuthProvider extends ChangeNotifier {
         'password': password,
       });
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        _accessToken = data['access_token'];
-        _user = User.fromJson(data['user']);
-
-        // 保存到本地
+      if (response.statusCode == 200 && _applyAuthEnvelope(response.data)) {
         await _storage.setAccessToken(_accessToken!);
         await _storage.setUserId(_user!.id);
         await _storage.setUserInfo(_user!);
-
         _isLoading = false;
         notifyListeners();
         return true;
-      } else {
-        _error = response.data['msg'] ?? '登录失败';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+      if (response.statusCode != 200) {
+        _error = 'HTTP ${response.statusCode}';
+      } else if (_error == null) {
+        _error = '登录失败';
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       debugPrint('登录失败: $e');
       _error = '网络错误，请检查网络连接';
@@ -111,28 +143,63 @@ class AuthProvider extends ChangeNotifier {
         'nickname': nickname,
       });
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        _accessToken = data['access_token'];
-        _user = User.fromJson(data['user']);
-
-        // 保存到本地
+      if (response.statusCode == 200 && _applyAuthEnvelope(response.data)) {
         await _storage.setAccessToken(_accessToken!);
         await _storage.setUserId(_user!.id);
         await _storage.setUserInfo(_user!);
-
         _isLoading = false;
         notifyListeners();
         return true;
-      } else {
-        _error = response.data['msg'] ?? '注册失败';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+      if (response.statusCode != 200) {
+        _error = 'HTTP ${response.statusCode}';
+      } else if (_error == null) {
+        _error = '注册失败';
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
       debugPrint('注册失败: $e');
-      _error = '网络错误，请检查网络连接';
+      String errorMessage = '操作失败，请重试';
+      if (e is DioException) {
+        debugPrint('DioException response: ${e.response?.data}');
+        debugPrint('DioException type: ${e.type}');
+        debugPrint('DioException message: ${e.message}');
+        if (e.response?.data != null) {
+          final data = e.response!.data;
+          if (data is Map) {
+            errorMessage = data['msg'] ?? data['message'] ?? errorMessage;
+          } else if (data is String && data.isNotEmpty) {
+            errorMessage = data;
+          }
+        } else {
+          // 根据错误类型生成更详细的错误信息
+          switch (e.type) {
+            case DioExceptionType.connectionTimeout:
+              errorMessage = '连接超时';
+              break;
+            case DioExceptionType.sendTimeout:
+              errorMessage = '发送请求超时';
+              break;
+            case DioExceptionType.receiveTimeout:
+              errorMessage = '接收响应超时';
+              break;
+            case DioExceptionType.connectionError:
+              errorMessage = '无法连接到服务器 (${e.message})';
+              break;
+            case DioExceptionType.badResponse:
+              errorMessage = '服务器错误: ${e.response?.statusCode}';
+              break;
+            default:
+              errorMessage = '请求失败: ${e.message ?? e.type.toString()}';
+          }
+        }
+      } else {
+        errorMessage = '错误: $e';
+      }
+      _error = errorMessage;
       _isLoading = false;
       notifyListeners();
       return false;

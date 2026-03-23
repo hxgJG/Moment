@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -110,6 +112,15 @@ func Load(configPath string) (*Config, error) {
 		// 读取配置文件
 		if err = viper.ReadInConfig(); err != nil {
 			return
+		}
+
+		// 可选：config.local.yaml 覆盖同名键（本机 MySQL 密码等，勿提交仓库）
+		localPath := filepath.Join(filepath.Dir(configPath), "config.local.yaml")
+		if _, statErr := os.Stat(localPath); statErr == nil {
+			viper.SetConfigFile(localPath)
+			if err = viper.MergeInConfig(); err != nil {
+				return
+			}
 		}
 
 		// 绑定环境变量
