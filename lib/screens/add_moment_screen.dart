@@ -6,6 +6,7 @@ import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:go_router/go_router.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
 
@@ -22,7 +23,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final AudioRecorder _audioRecorder = AudioRecorder();
 
-  List<String> _mediaPaths = [];
+  final List<String> _mediaPaths = [];
   MediaType _mediaType = MediaType.text;
   bool _isRecording = false;
   String? _recordingPath;
@@ -185,7 +186,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
       );
 
       if (success && mounted) {
-        Navigator.of(context).pop();
+        context.pop();
       } else if (mounted) {
         _showError(provider.error ?? '保存失败');
       }

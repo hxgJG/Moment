@@ -35,18 +35,22 @@ class DatabaseService {
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
         created_at TEXT NOT NULL,
+        updated_at TEXT,
         media_type INTEGER NOT NULL,
-        media_paths TEXT NOT NULL
+        media_paths TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0
       )
     ''');
   }
 
   /// 插入记录
-  Future<void> insertMoment(MomentRecord record) async {
+  Future<void> insertMoment(MomentRecord record, {bool synced = false}) async {
     final db = await database;
+    final map = record.toMap();
+    map['synced'] = synced ? 1 : 0;
     await db.insert(
       'moments',
-      record.toMap(),
+      map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -130,6 +134,29 @@ class DatabaseService {
       'text': textCount,
       'mixed': mixedCount,
     };
+  }
+
+  /// 获取未同步的记录
+  Future<List<MomentRecord>> getUnsyncedMoments() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'moments',
+      where: 'synced = ?',
+      whereArgs: [0],
+      orderBy: 'created_at DESC',
+    );
+    return List.generate(maps.length, (i) => MomentRecord.fromMap(maps[i]));
+  }
+
+  /// 标记记录为已同步
+  Future<void> markAsSynced(String id) async {
+    final db = await database;
+    await db.update(
+      'moments',
+      {'synced': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   /// 关闭数据库

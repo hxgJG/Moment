@@ -12,6 +12,7 @@ class MomentRecord {
   final String id;
   final String content;        // 文案内容
   final DateTime createdAt;    // 创建时间
+  final DateTime? updatedAt;   // 更新时间
   final MediaType mediaType;   // 媒体类型
   final List<String> mediaPaths; // 媒体文件路径列表
 
@@ -19,6 +20,7 @@ class MomentRecord {
     required this.id,
     required this.content,
     required this.createdAt,
+    this.updatedAt,
     required this.mediaType,
     required this.mediaPaths,
   });
@@ -29,6 +31,9 @@ class MomentRecord {
       id: map['id'] as String,
       content: map['content'] as String,
       createdAt: DateTime.parse(map['created_at'] as String),
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'] as String)
+          : null,
       mediaType: MediaType.values[map['media_type'] as int],
       mediaPaths: (map['media_paths'] as String).isEmpty
           ? []
@@ -42,6 +47,7 @@ class MomentRecord {
       'id': id,
       'content': content,
       'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
       'media_type': mediaType.index,
       'media_paths': mediaPaths.join(','),
     };
@@ -52,16 +58,47 @@ class MomentRecord {
     String? id,
     String? content,
     DateTime? createdAt,
+    DateTime? updatedAt,
     MediaType? mediaType,
     List<String>? mediaPaths,
+    bool? synced,
   }) {
     return MomentRecord(
       id: id ?? this.id,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       mediaType: mediaType ?? this.mediaType,
       mediaPaths: mediaPaths ?? this.mediaPaths,
     );
+  }
+
+  /// 从JSON创建对象（API响应）
+  factory MomentRecord.fromJson(Map<String, dynamic> json) {
+    return MomentRecord(
+      id: json['id'] as String,
+      content: json['content'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
+          : null,
+      mediaType: MediaType.values[json['media_type'] as int],
+      mediaPaths: (json['media_paths'] as String?)?.isNotEmpty == true
+          ? (json['media_paths'] as String).split(',')
+          : [],
+    );
+  }
+
+  /// 转换为JSON（API请求）
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'content': content,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+      'media_type': mediaType.index,
+      'media_paths': mediaPaths.join(','),
+    };
   }
 
   /// 判断是否有媒体内容

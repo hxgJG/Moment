@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:video_player/video_player.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
 
@@ -58,6 +59,10 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
           appBar: AppBar(
             title: const Text('记录详情'),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => context.push('/edit/${record.id}'),
+              ),
               IconButton(
                 icon: const Icon(Icons.delete_outline),
                 onPressed: () => _showDeleteDialog(context, provider, record),
@@ -139,10 +144,10 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.of(context).pop();
+              context.pop();
               await provider.deleteMoment(record.id);
               if (context.mounted) {
-                Navigator.of(context).pop();
+                context.pop();
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),

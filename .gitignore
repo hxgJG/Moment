@@ -58,3 +58,28 @@ app.*.map.json
 
 # Coverage
 coverage/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Backend/Server
+server/tmp/
+server/logs/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Admin Web
+admin/node_modules/
+admin/dist/
+admin/.DS_Store
+
+# Docker
+docker-compose.override.yml

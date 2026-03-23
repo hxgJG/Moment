@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
 import '../providers/moment_provider.dart';
 
 /// 我的Tab - 统计和设置
@@ -16,25 +18,121 @@ class MyTab extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: Consumer<MomentProvider>(
-        builder: (context, provider, child) {
-          final stats = provider.statistics;
+      body: Consumer2<AuthProvider, MomentProvider>(
+        builder: (context, authProvider, momentProvider, child) {
+          final stats = momentProvider.statistics;
+          final user = authProvider.user;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 用户信息卡片
+                _UserCard(user: user),
+                const SizedBox(height: 24),
+
                 // 统计卡片
                 _StatisticsCard(stats: stats),
                 const SizedBox(height: 24),
 
                 // 功能列表
-                _SettingsSection(),
+                _SettingsSection(
+                  onLogout: () => _handleLogout(context, authProvider),
+                ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _handleLogout(BuildContext context, AuthProvider authProvider) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('确定要退出登录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await authProvider.logout();
+      if (context.mounted) {
+        context.go('/login');
+      }
+    }
+  }
+}
+
+/// 用户信息卡片
+class _UserCard extends StatelessWidget {
+  final dynamic user;
+
+  const _UserCard({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: Colors.blue.withOpacity(0.1),
+              child: Text(
+                user?.nickname?.substring(0, 1).toUpperCase() ?? 'U',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?.nickname ?? '未登录',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (user?.username != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '@${user!.username}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -177,6 +275,10 @@ class _StatItem extends StatelessWidget {
 
 /// 设置区域
 class _SettingsSection extends StatelessWidget {
+  final VoidCallback onLogout;
+
+  const _SettingsSection({required this.onLogout});
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -186,6 +288,13 @@ class _SettingsSection extends StatelessWidget {
       ),
       child: Column(
         children: [
+          _SettingsItem(
+            icon: Icons.logout,
+            title: '退出登录',
+            onTap: onLogout,
+            isDestructive: true,
+          ),
+          const Divider(height: 1),
           _SettingsItem(
             icon: Icons.info_outline,
             title: '关于',
@@ -245,19 +354,31 @@ class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
+  final bool isDestructive;
 
   const _SettingsItem({
     required this.icon,
     required this.title,
     required this.onTap,
+    this.isDestructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.grey[700]),
-      title: Text(title),
-      trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
+      leading: Icon(
+        icon,
+        color: isDestructive ? Colors.red : Colors.grey[700],
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isDestructive ? Colors.red : null,
+        ),
+      ),
+      trailing: isDestructive
+          ? null
+          : Icon(Icons.chevron_right, color: Colors.grey[400]),
       onTap: onTap,
     );
   }
