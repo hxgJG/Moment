@@ -1,13 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
-import 'moment_detail_screen.dart';
 
 /// 时光Tab - 显示所有记录列表
-class MomentsTab extends StatelessWidget {
+class MomentsTab extends StatefulWidget {
   const MomentsTab({super.key});
+
+  @override
+  State<MomentsTab> createState() => _MomentsTabState();
+}
+
+class _MomentsTabState extends State<MomentsTab> {
+  final ScrollController _scrollController = ScrollController();
+  bool _isLoadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore) return;
+
+    final provider = context.read<MomentProvider>();
+    if (!provider.hasMore) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    await provider.loadMore();
+
+    if (mounted) {
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,14 +74,21 @@ class MomentsTab extends StatelessWidget {
             );
           }
 
-          if (provider.error != null) {
+          if (provider.error != null && provider.moments.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red[300],
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     provider.error!,
                     style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -80,15 +134,33 @@ class MomentsTab extends StatelessWidget {
           return RefreshIndicator(
             onRefresh: () => provider.initialize(),
             child: ListView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
-              itemCount: provider.moments.length,
+              itemCount: provider.moments.length + (provider.hasMore ? 1 : 0),
               itemBuilder: (context, index) {
+                if (index == provider.moments.length) {
+                  return _buildLoadMoreIndicator();
+                }
                 final record = provider.moments[index];
                 return _MomentCard(record: record);
               },
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: _isLoadingMore
+            ? const CircularProgressIndicator()
+            : TextButton(
+                onPressed: _loadMore,
+                child: const Text('加载更多'),
+              ),
       ),
     );
   }
@@ -112,11 +184,7 @@ class _MomentCard extends StatelessWidget {
       ),
       child: InkWell(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => MomentDetailScreen(recordId: record.id),
-            ),
-          );
+          context.push('/detail/${record.id}');
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(

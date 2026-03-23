@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'moments_tab.dart';
 import 'my_tab.dart';
-import 'add_moment_screen.dart';
 
 /// 首页 - 底部Tab导航
 class HomeScreen extends StatefulWidget {
@@ -48,11 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const AddMomentScreen(),
-            ),
-          );
+          context.push('/add');
         },
         child: const Icon(Icons.add),
       ),
