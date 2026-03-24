@@ -6,7 +6,7 @@
 #   bash shell/restart_backend.sh
 #   chmod +x shell/restart_backend.sh && ./shell/restart_backend.sh
 #
-# 说明：脚本会自动定位到「本仓库根目录」再执行 docker compose / 提示命令。
+# 说明：团队约定 MySQL+Redis 用 Docker；后端多在宿主机 go run。本脚本可协助 compose 与端口诊断。
 # =============================================================================
 
 # 不使用 set -e，避免菜单输入异常直接退出
@@ -155,23 +155,23 @@ docker_server_running() {
 print_howto_go_run() {
   say ""
   say "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  say "接下来请在本机启动后端（二选一即可）："
+  say "标准流程：先在仓库根启动依赖，再启后端："
   say ""
-  say "  【方式 A】当前终端前台运行（日志直接显示，关掉终端即停止）："
+  say "      cd \"${REPO_ROOT}\""
+  say "      docker compose up -d mysql redis"
+  say ""
+  say "然后在本机启动 Go（任选终端前台或后台）："
   say "      cd \"${REPO_ROOT}/server\""
   say "      go run ./cmd/server"
   say ""
-  say "  【方式 B】另开一个终端窗口执行上面两行，保持窗口不要关。"
-  say ""
-  say "前提：本机已安装 Go 1.21+，且 MySQL、Redis 已启动；账号密码与"
-  say "      server/configs/config.yaml 或 config.local.yaml 一致。"
+  say "前提：Docker 已安装；Go 1.21+；config 与 compose 默认一致（或已配置 config.local.yaml）。"
   say "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
 print_howto_docker() {
   say ""
-  say "Docker 方式：仓库根目录下已配置 mysql / redis / server 等服务。"
-  say "若改动了 Go 代码，一般需要选「重新构建并启动后端」才会生效。"
+  say "Compose：仓库含 mysql、redis、server、admin。日常开发多只用 mysql+redis，后端本机 go run。"
+  say "若用容器跑后端（moment-server），改 Go 代码后需「重新构建并启动后端」。"
 }
 
 # -----------------------------------------------------------------------------
@@ -232,7 +232,7 @@ menu_docker() {
 
   while true; do
     clear 2>/dev/null || true
-    say "======== Docker 方式：后端相关操作 ========"
+    say "======== Docker Compose（库 / 缓存 / 可选后端容器）========"
     print_howto_docker
     say ""
     say "1) 只重启后端容器（moment-server）【改配置/容器卡死时常用】"
@@ -289,9 +289,9 @@ menu_docker() {
 menu_local_go() {
   while true; do
     clear 2>/dev/null || true
-    say "======== 本机 Go 直接运行（不用 Docker 跑后端时）========"
+    say "======== 本机 go run（标准：先 docker compose up mysql redis）========"
     say ""
-    say "适用：你在终端里执行过  cd server && go run ./cmd/server"
+    say "适用：宿主机跑 API；MySQL/Redis 由 Compose 提供。"
     say "常见问题：上次没关终端、或进程还在，导致端口被占用，新开一次会报错。"
     say ""
     say "1) 查看谁占用了端口 ${DEFAULT_HTTP_PORT}"
@@ -350,21 +350,18 @@ menu_local_go() {
 
 menu_help() {
   clear 2>/dev/null || true
-  say "======== 说明：两种常见方式，别混用 ========"
+  say "======== 统一约定（各设备相同）========"
   say ""
-  say "【Docker】"
-  say "  在仓库根目录用 docker compose 起了 moment-server 容器。"
-  say "  特点：MySQL、Redis 也可以一起在 Docker 里，环境相对固定。"
-  say "  改 Go 代码后：选「重新构建并启动后端」。"
+  say "【标配】Docker 只负责 MySQL + Redis："
+  say "  cd 仓库根 && docker compose up -d mysql redis"
+  say "  然后 cd server && go run ./cmd/server（改代码即时生效，无需重建镜像）。"
   say ""
-  say "【本机 go run】"
-  say "  在自己电脑上装了 Go，在 server 目录执行 go run ./cmd/server。"
-  say "  特点：要自己本机先装好 MySQL、Redis，并改对 config.yaml。"
-  say "  重启：先结束旧进程（释放 8080），再重新 go run。"
+  say "【可选】API 也放进容器：docker compose up -d（含 moment-server）。"
+  say "  改 Go 后需重建 server 镜像；且不要与宿主机 go run 同时占 8080。"
   say ""
-  say "【不要混用】"
-  say "  若 Docker 里的后端已占 8080，本机再 go run 会端口冲突；反之亦然。"
-  say "  不确定时：主菜单选「环境诊断」。"
+  say "【例外】不用 Docker 时：自行安装 MySQL/Redis，用 config.local.yaml。"
+  say ""
+  say "不确定时：主菜单选「环境诊断」。"
   say ""
   pause
 }
@@ -382,9 +379,9 @@ main_menu() {
     say ""
     say "我不确定怎么启动过后端 → 请先选 4 看环境诊断"
     say ""
-    say "1) 我用 Docker（docker compose）跑过后端"
-    say "2) 我在本机用「go run」跑过后端（不用 Docker 跑后端）"
-    say "3) 看文字说明：Docker 和 go run 有什么区别"
+    say "1) Docker Compose（起库 / 起后端容器 / 重建镜像）"
+    say "2) 本机 go run 后端（约定：MySQL+Redis 已由 Compose 启动）"
+    say "3) 看统一约定说明"
     say "4) 环境诊断（端口、健康检查、是否在跑 Docker 后端）"
     say "0) 退出"
     say ""

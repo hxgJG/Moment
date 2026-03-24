@@ -191,7 +191,7 @@
 
 | 类别 | 技术 | 说明 |
 |------|------|------|
-| 容器化 | Docker + Docker Compose | 本地/测试部署 |
+| 容器化 | Docker + Docker Compose | 开发统一提供 MySQL/Redis；可选全栈容器 |
 | 反向代理 | Nginx / Caddy | 生产环境 |
 | CI/CD | GitHub Actions / GitLab CI | 自动化构建 |
 
@@ -354,37 +354,49 @@ app/lib/
 
 ### 2.7 部署方案
 
-#### 2.7.1 开发环境
+**约定：开发机安装 Docker（含 Compose v2）**，用 Compose 统一提供 **MySQL、Redis**；后端与前端工具链仍在宿主机运行（调试体验一致）。仓库根目录 **`docker-compose.yml`**、**`.env.example`**；后端默认 **`server/configs/config.yaml`**，仅当连接信息与默认不符时用 **`server/configs/config.local.yaml`**（已 `.gitignore`）。环境变量覆盖见 `server/pkg/config/config.go`。
+
+#### 2.7.1 标准开发流（各设备相同）
+
+1. 仓库根目录：`cp .env.example .env`（可按需改端口/密钥；团队可共用默认值做本地联调）
+2. `docker compose up -d mysql redis`，等待 MySQL healthy（首次会自动执行 `server/migrations` 初始化）
+3. `cd server && go run ./cmd/server`
+4. `cd admin && npm run dev`（Vite 代理本机 `8080`）
+5. `cd app && flutter run …`（按需）
+
+**全栈容器**（联调部署形态）：`cd admin && npm run build` 后，仓库根执行 `docker compose up -d`，由容器跑 `server` + Nginx 托管 `admin/dist`。
+
+#### 2.7.2 场景对照
+
+| 场景 | MySQL / Redis | API / 调试 |
+|------|---------------|------------|
+| **日常开发（默认）** | `docker compose up -d mysql redis` | 宿主机 `go run` + `npm run dev` |
+| **全栈 Docker** | Compose 管理 | `docker compose up -d`，容器内 `DATABASE_HOST=mysql` 等 |
+
+**例外（无 Docker 或必须连外部库）**：自行准备 MySQL 8 + Redis，并配置 **`config.local.yaml`**（或环境变量），必要时手动执行 `server/migrations/001_init.sql`。
+
+**默认账号与端口（与 compose / `config.yaml` 对齐；生产勿用默认密钥入库）：**
+
+| 项 | 默认值 |
+|----|--------|
+| 库名 | `moment` |
+| 应用用户 | `moment` / `moment_password` |
+| MySQL root（容器内管理） | `root_password`（`.env`） |
+| 后端 HTTP | `8080` |
+| Redis | `localhost:6379`（无密码） |
+
+#### 2.7.3 命令速查
 
 ```bash
-# 后端
+# 依赖（每次开机或克隆仓库后）
+docker compose up -d mysql redis
+
 cd server && go run ./cmd/server
-
-# Web 管理
 cd admin && npm run dev
-
-# Flutter
 cd app && flutter run -d android
 ```
 
-#### 2.7.2 Docker 部署（示例）
-
-```yaml
-# docker-compose.yml
-services:
-  api:
-    build: ./server
-    ports: ["8080:8080"]
-    depends_on: [mysql, redis]
-  mysql:
-    image: mysql:8
-    volumes: [mysql_data:/var/lib/mysql]
-  redis:
-    image: redis:alpine
-  admin:
-    build: ./admin
-    ports: ["3000:80"]
-```
+更细的排错与验证见 **`doc/moment_debug.md`**。
 
 ### 2.8 开发流程与规范
 
@@ -397,4 +409,4 @@ services:
 
 ---
 
-*文档版本：1.0 | 更新日期：2025-03*
+*文档版本：1.2 | 更新日期：2026-03*

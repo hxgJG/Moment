@@ -1,3 +1,7 @@
+# Moment — 本地与团队统一约定：用 Docker 提供 MySQL / Redis（必备）。
+#   日常开发：docker compose up -d mysql redis，再在宿主机 go run / npm run dev
+#   验证全容器：docker compose up -d（需已 npm run build admin）
+# 端口与库账号与 server/configs/config.yaml、.env.example 一致。
 version: '3.8'
 
 services:

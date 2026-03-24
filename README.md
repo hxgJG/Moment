@@ -88,7 +88,16 @@ lib/
 
 ## 后端 API（可选）
 
-本地跑 `server/` 时，MySQL 账号与 `server/configs/config.yaml` 默认不一致：复制 `server/configs/config.local.example.yaml` 为 **`server/configs/config.local.yaml`** 并填写 `database`（该文件已加入 `.gitignore`）。**首次**若报库不存在，在项目根执行：`mysql -u root -p < server/migrations/001_init.sql`。详见 `doc/moment_debug.md`。
+开发与团队约定一致：**Docker 提供 MySQL + Redis**。
+
+```bash
+# 仓库根目录
+cp .env.example .env   # 首次；已存在可跳过
+docker compose up -d mysql redis
+cd server && go run ./cmd/server
+```
+
+`server/configs/config.yaml` 默认库账号 **`moment` / `moment_password`**，与 `.env.example`、`docker-compose.yml` 一致。**不使用 Docker 或连接外部库时**，用 `server/configs/config.local.example.yaml` 复制为 **`config.local.yaml`** 覆盖（已 `.gitignore`）。详见 `doc/moment_debug.md`、`doc/project_develop_detail.md` §2.7。
 
 ## 快速开始
 

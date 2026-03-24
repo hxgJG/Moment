@@ -8,32 +8,32 @@
 
 | 组件 | 要求 |
 |------|------|
-| 后端 | Go 1.21+，`server/configs/config.yaml` 中数据库、Redis 与本地实际一致 |
+| 容器 | **Docker** + **Docker Compose v2**（与团队统一，负责 MySQL、Redis） |
+| 后端 | Go 1.21+；`config.yaml` 默认用户 `moment` / `moment_password`；连非 Docker 库时用 `config.local.yaml` |
 | Web | Node 18+，`admin/` 下已 `npm install` |
 | 客户端 | Flutter（项目 README 推荐 3.22.1-ohos-1.0.1），已 `flutter pub get` |
-| 数据层 | MySQL 8 库名 `moment`、Redis；可用本机安装或 Docker Compose |
 
 ---
 
 ## 一、启动服务器（及依赖）
 
-### 1.1 用 Docker 启动 MySQL + Redis + 后端（可选）
+### 1.1 启动 MySQL + Redis（标准步骤）
 
-仓库根目录：
+仓库根目录（首次建议 `cp .env.example .env`）：
 
 ```bash
 docker compose up -d mysql redis
-# 待 MySQL healthy 后，再启后端（或一次性 up）
-docker compose up -d server
 ```
 
-- 默认后端端口：**8080**（可用环境变量 `SERVER_PORT` 覆盖）。
-- Compose 中 MySQL 会挂载 `server/migrations` 做初始化；若与本机 `config.yaml` 账号不一致，请以 Compose 环境变量或本机配置为准。
+- 默认后端端口：**8080**（`go run` 在宿主机；可用环境变量 `SERVER_PORT` 覆盖 compose 中的 server 服务）。
+- MySQL 挂载 `server/migrations` 做首次初始化；应用账号 **`moment` / `moment_password`**，与 `server/configs/config.yaml`、`.env.example` 一致。
 
-### 1.2 本机直接运行 Go 后端（常用调试方式）
+**全栈容器**（可选）：先 `cd admin && npm run build`，再在根目录 `docker compose up -d`。
 
-1. 确保 MySQL、Redis 已启动，且 `server/configs/config.yaml` 中 `database`、`redis` 可连通。
-2. 若尚未建表，执行仓库中的 SQL 迁移（如 `server/migrations/001_init.sql`）。
+### 1.2 本机运行 Go 后端（日常调试）
+
+1. 已执行 **1.1**，且 `docker compose ps` 中 `mysql`、`redis` 为 running/healthy。
+2. 若自行维护库且未走 Compose 初始化，再执行 `server/migrations/001_init.sql`。
 3. 在 `server` 目录：
 
 ```bash
@@ -43,12 +43,12 @@ go run ./cmd/server
 
 ### 1.2.1 MySQL `Access denied`（Error 1045）
 
-表示 `server/configs/config.yaml` 里 **`database.username` / `database.password`** 与本机 MySQL 不一致（仓库默认常为 `root` / `password`，仅作示例）。
+表示 **`database.username` / `database.password`** 与当前 MySQL 不一致。标准 Compose 库用户为 **`moment` / `moment_password`**；若你改用本机 root 或其它实例：
 
 任选其一：
 
-1. **改配置文件（推荐）**：在 `server/configs/` 下复制 `config.local.example.yaml` 为 **`config.local.yaml`**，只改其中 `database.username` / `database.password`（无密码则 `password: ""`）。服务启动时会自动合并覆盖 `config.yaml` 中的同名字段。若 root 无密码，可写 `password: ""`。并确保已创建库 `moment`（可 `CREATE DATABASE moment CHARACTER SET utf8mb4;`），需要时执行 `server/migrations/001_init.sql`。也可直接改 `config.yaml`，但请勿把含真实密码的改动推送到远程仓库。  
-2. **用环境变量覆盖**（不改动 yaml 时）：与 `server/pkg/config/config.go` 中 `bindEnvVars` 一致，例如：
+1. **改配置文件（推荐）**：复制 `config.local.example.yaml` 为 **`config.local.yaml`**，填写 `database`（无密码则 `password: ""`）。并确保已创建库 `moment`，需要时执行 `server/migrations/001_init.sql`。请勿将含真实密码的 `config.local.yaml` 提交仓库。  
+2. **用环境变量覆盖**：见 `server/pkg/config/config.go` 中 `bindEnvVars`，例如：
    ```bash
    export DATABASE_USER=root
    export DATABASE_PASSWORD='你的MySQL密码'
@@ -111,7 +111,7 @@ npm run dev
 
 - **页面空白或接口 502**：确认后端已启动且端口为 `8080`，与 Vite `proxy.target` 一致。
 - **跨域**：开发态由代理解决；若改直连后端域名，需后端 CORS 配置配合。
-- **管理端提示「用户名或密码错误」**：默认账号 `admin` / `admin123`。若 MySQL 数据卷在仓库修复迁移脚本**之前**就已创建，库里的 bcrypt 可能仍是旧错误值；Compose 的 `mysql` **不会**自动重跑 `001_init`。在项目根执行一次：`mysql -h127.0.0.1 -P3307 -umoment -pmoment_password moment < server/migrations/002_fix_admin_password.sql`（端口、账号与本地/Compose 一致即可），然后**重启 Go 后端**（不必重启 Vite）。若提示「账号已被禁用」，多为缺少 `user_roles` 与 `super_admin` 的关联，同一脚本中的 `INSERT IGNORE` 会补全。
+- **管理端提示「用户名或密码错误」**：默认账号 `admin` / `admin123`。若 MySQL 数据卷在仓库修复迁移脚本**之前**就已创建，库里的 bcrypt 可能仍是旧错误值；Compose 的 `mysql` **不会**自动重跑 `001_init`。在项目根执行一次：`mysql -h127.0.0.1 -P3306 -umoment -pmoment_password moment < server/migrations/002_fix_admin_password.sql`（若改了 `MYSQL_PORT` 或账号，请与 `.env` / `config.yaml` 一致），然后**重启 Go 后端**（不必重启 Vite）。若提示「账号已被禁用」，多为缺少 `user_roles` 与 `super_admin` 的关联，同一脚本中的 `INSERT IGNORE` 会补全。
 
 ### 2.5 生产形态（Compose 中的 admin）
 

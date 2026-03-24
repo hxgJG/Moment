@@ -1,4 +1,7 @@
 # Moment Server 配置文件
+#
+# 约定：用 Docker Compose 起 MySQL+Redis（见仓库根 docker-compose.yml），本配置与 .env.example 中 MYSQL_* 一致。
+# 例外：本机自建 MySQL 等，请复制 config.local.example.yaml 为 config.local.yaml 覆盖。
 
 app:
   name: "moment-server"
@@ -7,14 +10,13 @@ app:
   mode: "debug"  # debug, release, test
   env: "development"
 
-# 本机账号与仓库默认不一致时：复制 config.local.example.yaml 为 config.local.yaml 并只填 database（见该示例文件）
 database:
   driver: "mysql"
   host: "localhost"
   port: 3306
   database: "moment"
-  username: "root"
-  password: "password"
+  username: "moment"
+  password: "moment_password"
   charset: "utf8mb4"
   max_idle_conns: 10
   max_open_conns: 100
