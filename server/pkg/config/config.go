@@ -83,10 +83,14 @@ type LogConfig struct {
 	MaxAge    int    `mapstructure:"max_age"`
 }
 
-// DSN 返回数据库连接字符串
+// DSN 返回数据库连接字符串（强制 utf8mb4 + collation，避免中文按 latin1 误读导致乱码）
 func (d *DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local",
-		d.Username, d.Password, d.Host, d.Port, d.Database, d.Charset)
+	cs := strings.TrimSpace(d.Charset)
+	if cs == "" || strings.EqualFold(cs, "utf8") {
+		cs = "utf8mb4"
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local",
+		d.Username, d.Password, d.Host, d.Port, d.Database, cs)
 }
 
 // Addr 返回 Redis 地址

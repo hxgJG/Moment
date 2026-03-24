@@ -111,6 +111,7 @@ npm run dev
 
 - **页面空白或接口 502**：确认后端已启动且端口为 `8080`，与 Vite `proxy.target` 一致。
 - **跨域**：开发态由代理解决；若改直连后端域名，需后端 CORS 配置配合。
+- **管理端提示「用户名或密码错误」**：默认账号 `admin` / `admin123`。若 MySQL 数据卷在仓库修复迁移脚本**之前**就已创建，库里的 bcrypt 可能仍是旧错误值；Compose 的 `mysql` **不会**自动重跑 `001_init`。在项目根执行一次：`mysql -h127.0.0.1 -P3307 -umoment -pmoment_password moment < server/migrations/002_fix_admin_password.sql`（端口、账号与本地/Compose 一致即可），然后**重启 Go 后端**（不必重启 Vite）。若提示「账号已被禁用」，多为缺少 `user_roles` 与 `super_admin` 的关联，同一脚本中的 `INSERT IGNORE` 会补全。
 
 ### 2.5 生产形态（Compose 中的 admin）
 

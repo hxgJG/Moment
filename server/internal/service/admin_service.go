@@ -19,7 +19,8 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrRoleNotFound      = errors.New("role not found")
 	ErrRoleExists        = errors.New("role already exists")
-	ErrRoleHasUsers      = errors.New("role has assigned users")
+	ErrRoleHasUsers           = errors.New("role has assigned users")
+	ErrInvalidAdminRefresh    = errors.New("invalid admin refresh token")
 )
 
 // ==================== 用户管理 ====================
@@ -32,9 +33,16 @@ type AdminLoginRequest struct {
 
 // AdminLoginResponse 管理员登录响应
 type AdminLoginResponse struct {
-	Token     string        `json:"token"`
-	User      *UserResponse `json:"user"`
-	ExpiresAt int64         `json:"expires_at"`
+	Token        string        `json:"token"`
+	RefreshToken string        `json:"refresh_token"`
+	User         *UserResponse `json:"user"`
+	ExpiresAt    int64         `json:"expires_at"`
+	ExpiresIn    int           `json:"expires_in"`
+}
+
+// AdminRefreshRequest 管理员刷新 Token
+type AdminRefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 // UserListResponse 用户列表响应
@@ -95,18 +103,62 @@ func (s *UserService) AdminLogin(req *AdminLoginRequest) (*AdminLoginResponse, e
 		return nil, ErrUserDisabled
 	}
 
-	// 生成Token
-	token, _, err := jwt.GetManager().GenerateTokenPair(user.ID, user.Username, "admin")
+	jm := jwt.GetManager()
+	access, refresh, err := jm.GenerateTokenPair(user.ID, user.Username, "admin")
 	if err != nil {
 		return nil, err
 	}
 
-	expiresAt := time.Now().Add(24 * time.Hour).Unix()
+	ttl := jm.AccessTokenExpireSeconds()
+	expiresAt := time.Now().Add(time.Duration(ttl) * time.Second).Unix()
 
 	return &AdminLoginResponse{
-		Token:     token,
-		User:      toUserResponse(user),
-		ExpiresAt: expiresAt,
+		Token:        access,
+		RefreshToken: refresh,
+		User:         toUserResponse(user),
+		ExpiresAt:    expiresAt,
+		ExpiresIn:    ttl,
+	}, nil
+}
+
+// AdminRefreshToken 用 refresh_token 换新的管理员 access/refresh
+func (s *UserService) AdminRefreshToken(req *AdminRefreshRequest) (*AdminLoginResponse, error) {
+	claims, err := jwt.GetManager().ParseToken(req.RefreshToken)
+	if err != nil {
+		return nil, ErrInvalidAdminRefresh
+	}
+	if claims.Subject != "refresh" {
+		return nil, ErrInvalidAdminRefresh
+	}
+
+	user, err := s.userRepo.FindByID(claims.UserID)
+	if err != nil {
+		return nil, ErrInvalidAdminRefresh
+	}
+	if !user.IsEnabled() {
+		return nil, ErrInvalidAdminRefresh
+	}
+
+	isAdmin, err := s.userRepo.HasAdminRole(user.ID)
+	if err != nil || !isAdmin {
+		return nil, ErrInvalidAdminRefresh
+	}
+
+	jm := jwt.GetManager()
+	access, refresh, err := jm.GenerateTokenPair(user.ID, user.Username, "admin")
+	if err != nil {
+		return nil, err
+	}
+
+	ttl := jm.AccessTokenExpireSeconds()
+	expiresAt := time.Now().Add(time.Duration(ttl) * time.Second).Unix()
+
+	return &AdminLoginResponse{
+		Token:        access,
+		RefreshToken: refresh,
+		User:         toUserResponse(user),
+		ExpiresAt:    expiresAt,
+		ExpiresIn:    ttl,
 	}, nil
 }
 

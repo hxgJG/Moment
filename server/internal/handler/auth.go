@@ -41,6 +41,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			response.Error(c, response.CodeBadRequest, "user already exists")
 			return
 		}
+		if errors.Is(err, service.ErrNicknameEqualsPassword) {
+			response.BadRequest(c, "昵称不能与密码相同")
+			return
+		}
 		response.InternalServerError(c, err.Error())
 		return
 	}

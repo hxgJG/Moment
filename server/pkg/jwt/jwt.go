@@ -47,6 +47,11 @@ func GetManager() *Manager {
 	return manager
 }
 
+// AccessTokenExpireSeconds access token 有效期（秒）
+func (m *Manager) AccessTokenExpireSeconds() int {
+	return int(m.accessTokenExpire / time.Second)
+}
+
 // GenerateAccessToken 生成访问令牌
 func (m *Manager) GenerateAccessToken(userID uint64, username, role string) (string, error) {
 	now := time.Now()

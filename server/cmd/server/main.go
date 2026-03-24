@@ -144,6 +144,7 @@ func registerRoutes(router *gin.Engine) {
 		{
 			// 管理员登录（不需要认证）
 			admin.POST("/login", adminHandler.Login)
+			admin.POST("/refresh", adminHandler.Refresh)
 
 			// 需要管理员权限的路由
 			adminProtected := admin.Group("")

@@ -60,6 +60,27 @@ func (h *AdminHandler) Login(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// Refresh 管理员刷新 Token
+func (h *AdminHandler) Refresh(c *gin.Context) {
+	var req service.AdminRefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	result, err := h.userService.AdminRefreshToken(&req)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidAdminRefresh) {
+			response.Unauthorized(c, "invalid refresh token")
+			return
+		}
+		response.InternalServerError(c, err.Error())
+		return
+	}
+
+	response.Success(c, result)
+}
+
 // ListUsers 获取用户列表
 // @Summary 获取用户列表
 // @Tags admin

@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	ErrUserNotFound       = errors.New("user not found")
-	ErrInvalidPassword    = errors.New("invalid password")
-	ErrUserAlreadyExists   = errors.New("user already exists")
-	ErrInvalidRefreshToken = errors.New("invalid refresh token")
+	ErrUserNotFound            = errors.New("user not found")
+	ErrInvalidPassword         = errors.New("invalid password")
+	ErrUserAlreadyExists       = errors.New("user already exists")
+	ErrInvalidRefreshToken     = errors.New("invalid refresh token")
+	ErrNicknameEqualsPassword  = errors.New("nickname must not equal password")
 )
 
 // AuthService 认证服务
@@ -65,6 +66,10 @@ func (s *AuthService) Register(req *RegisterRequest) (*TokenResponse, error) {
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
+	}
+
+	if req.Nickname != "" && req.Nickname == req.Password {
+		return nil, ErrNicknameEqualsPassword
 	}
 
 	// 加密密码

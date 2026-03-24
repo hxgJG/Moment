@@ -4,6 +4,34 @@ import '../models/user.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
 
+String _messageForAuthException(Object e) {
+  if (e is! DioException) {
+    return '请求异常: $e';
+  }
+  final ex = e;
+  final data = ex.response?.data;
+  if (data is Map) {
+    final msg = data['msg'] ?? data['message'];
+    if (msg != null) return msg.toString();
+  } else if (data is String && data.isNotEmpty) {
+    return data;
+  }
+  switch (ex.type) {
+    case DioExceptionType.connectionTimeout:
+    case DioExceptionType.sendTimeout:
+      return '连接超时，请确认后端已启动且 API 地址正确';
+    case DioExceptionType.receiveTimeout:
+      return '接收响应超时';
+    case DioExceptionType.connectionError:
+      return '无法连接服务器。USB 请 adb reverse tcp:8080 tcp:8080 并使用 127.0.0.1；'
+          '模拟器可改为 10.0.2.2；Wi‑Fi 真机请改为电脑局域网 IP（见 lib/config/env.dart）';
+    case DioExceptionType.badResponse:
+      return '服务器错误: HTTP ${ex.response?.statusCode}';
+    default:
+      return ex.message ?? '请求失败';
+  }
+}
+
 /// 认证状态管理Provider
 class AuthProvider extends ChangeNotifier {
   final StorageService _storage = StorageService();
@@ -95,10 +123,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.post('/auth/login', data: {
-        'username': username,
-        'password': password,
-      });
+      final response = await _api.post(
+        '/auth/login',
+        data: {
+          'username': username,
+          'password': password,
+        },
+        retry: false,
+      );
 
       if (response.statusCode == 200 && _applyAuthEnvelope(response.data)) {
         await _storage.setAccessToken(_accessToken!);
@@ -119,7 +151,7 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       debugPrint('登录失败: $e');
-      _error = '网络错误，请检查网络连接';
+      _error = _messageForAuthException(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -137,11 +169,15 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.post('/auth/register', data: {
-        'username': username,
-        'password': password,
-        'nickname': nickname,
-      });
+      final response = await _api.post(
+        '/auth/register',
+        data: {
+          'username': username,
+          'password': password,
+          'nickname': nickname,
+        },
+        retry: false,
+      );
 
       if (response.statusCode == 200 && _applyAuthEnvelope(response.data)) {
         await _storage.setAccessToken(_accessToken!);
@@ -162,44 +198,7 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       debugPrint('注册失败: $e');
-      String errorMessage = '操作失败，请重试';
-      if (e is DioException) {
-        debugPrint('DioException response: ${e.response?.data}');
-        debugPrint('DioException type: ${e.type}');
-        debugPrint('DioException message: ${e.message}');
-        if (e.response?.data != null) {
-          final data = e.response!.data;
-          if (data is Map) {
-            errorMessage = data['msg'] ?? data['message'] ?? errorMessage;
-          } else if (data is String && data.isNotEmpty) {
-            errorMessage = data;
-          }
-        } else {
-          // 根据错误类型生成更详细的错误信息
-          switch (e.type) {
-            case DioExceptionType.connectionTimeout:
-              errorMessage = '连接超时';
-              break;
-            case DioExceptionType.sendTimeout:
-              errorMessage = '发送请求超时';
-              break;
-            case DioExceptionType.receiveTimeout:
-              errorMessage = '接收响应超时';
-              break;
-            case DioExceptionType.connectionError:
-              errorMessage = '无法连接到服务器 (${e.message})';
-              break;
-            case DioExceptionType.badResponse:
-              errorMessage = '服务器错误: ${e.response?.statusCode}';
-              break;
-            default:
-              errorMessage = '请求失败: ${e.message ?? e.type.toString()}';
-          }
-        }
-      } else {
-        errorMessage = '错误: $e';
-      }
-      _error = errorMessage;
+      _error = _messageForAuthException(e);
       _isLoading = false;
       notifyListeners();
       return false;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../models/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/moment_provider.dart';
 
@@ -78,13 +79,30 @@ class MyTab extends StatelessWidget {
 }
 
 /// 用户信息卡片
+///
+/// 主信息使用登录名 [User.username]，避免把「昵称」误填成密码后在首页醒目展示。
 class _UserCard extends StatelessWidget {
-  final dynamic user;
+  final User? user;
 
   const _UserCard({required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final u = user;
+    if (u == null) {
+      return Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('未登录'),
+        ),
+      );
+    }
+
+    final initial =
+        u.username.isNotEmpty ? u.username.characters.first.toUpperCase() : 'U';
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -98,7 +116,7 @@ class _UserCard extends StatelessWidget {
               radius: 32,
               backgroundColor: Colors.blue.withOpacity(0.1),
               child: Text(
-                user?.nickname?.substring(0, 1).toUpperCase() ?? 'U',
+                initial,
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -112,22 +130,12 @@ class _UserCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    user?.nickname ?? '未登录',
+                    '@${u.username}',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (user?.username != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '@${user!.username}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),

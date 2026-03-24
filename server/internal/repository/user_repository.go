@@ -77,7 +77,7 @@ func (r *UserRepository) HasAdminRole(userID uint64) (bool, error) {
 	var count int64
 	err := r.db.Model(&model.UserRole{}).
 		Joins("JOIN roles ON user_roles.role_id = roles.id").
-		Where("user_roles.user_id = ? AND roles.code IN (?, ?, ?)", userID, "super_admin", "admin", "admin").
+		Where("user_roles.user_id = ? AND roles.code IN (?, ?)", userID, "super_admin", "admin").
 		Where("roles.status = 1").
 		Count(&count).Error
 	if err != nil {

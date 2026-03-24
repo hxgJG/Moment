@@ -4,14 +4,14 @@ class EnvConfig {
   ///
   /// **Android**（BlueStacks / AVD / USB 真机）：在电脑上执行 `adb reverse tcp:8080 tcp:8080`
   /// 后再调试。未做 reverse 的 Google AVD 可临时改为 `http://10.0.2.2:8080/v1`。
-  /// **Web 调试**：使用本机局域网 IP 如 `http://192.168.0.106:8080/v1`
+  /// **Web / Wi‑Fi 真机**：改为电脑局域网 IP，例如 `http://192.168.1.5:8080/v1`
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.0.106:8080/v1',
+    defaultValue: 'http://127.0.0.1:8080/v1',
   );
 
-  /// 连接超时时间
-  static const Duration connectTimeout = Duration(seconds: 30);
+  /// 连接超时（连错地址时会卡满该时长；登录等已关闭重试）
+  static const Duration connectTimeout = Duration(seconds: 15);
 
   /// 接收超时时间
   static const Duration receiveTimeout = Duration(seconds: 30);

@@ -100,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserList, createUser, updateUser, deleteUser, toggleUserStatus } from '../api/user'
 
@@ -133,11 +133,7 @@ const formRules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
-const dialogTitle = computed(() => form.id ? '编辑用户' : '新增用户')
-
-function computed() {
-  return { dialogTitle }
-}
+const dialogTitle = computed(() => (form.id ? '编辑用户' : '新增用户'))
 
 async function loadData() {
   loading.value = true

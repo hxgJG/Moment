@@ -193,6 +193,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           if (!_isLogin && (value == null || value.trim().isEmpty)) {
                             return '请输入昵称';
                           }
+                          if (!_isLogin &&
+                              value != null &&
+                              value.trim() == _passwordController.text) {
+                            return '昵称不能与密码相同';
+                          }
                           return null;
                         },
                       ),

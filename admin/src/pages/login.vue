@@ -82,7 +82,7 @@ async function handleLogin() {
 
   try {
     const res = await adminLogin(form)
-    adminStore.setToken(res.data.token)
+    adminStore.setTokens(res.data.token, res.data.refresh_token)
     adminStore.setUser(res.data.user)
     ElMessage.success('登录成功')
     router.push('/')

@@ -151,7 +151,7 @@ INSERT INTO `roles` (`name`, `code`, `description`, `status`) VALUES
 
 -- 插入超级管理员用户（密码：admin123，bcrypt加密）
 INSERT INTO `users` (`username`, `password`, `nickname`, `status`) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '超级管理员', 1);
+('admin', '$2a$10$uKzWOxUe901YJhGwe540l.7O3vRneTmgaaHMmRVagd8PMrrbaxIzi', '超级管理员', 1);
 
 -- 关联超级管理员和角色
 INSERT INTO `user_roles` (`user_id`, `role_id`) VALUES (1, 1);
