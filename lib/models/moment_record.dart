@@ -73,23 +73,90 @@ class MomentRecord {
     );
   }
 
-  /// 从JSON创建对象（API响应）
+  /// 从JSON创建对象（API响应，兼容服务端与旧格式）
   factory MomentRecord.fromJson(Map<String, dynamic> json) {
+    return MomentRecord.fromApiMap(json);
+  }
+
+  /// 解析服务端 / 管理端返回的单条时光（id 为数字、media_type 为字符串、media_paths 为数组）
+  factory MomentRecord.fromApiMap(Map<String, dynamic> json) {
     return MomentRecord(
-      id: json['id'] as String,
-      content: json['content'] as String,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      id: json['id'].toString(),
+      content: json['content'] as String? ?? '',
+      createdAt: _parseApiDateTime(json['created_at']),
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? _parseApiDateTime(json['updated_at'])
           : null,
-      mediaType: MediaType.values[json['media_type'] as int],
-      mediaPaths: (json['media_paths'] as String?)?.isNotEmpty == true
-          ? (json['media_paths'] as String).split(',')
-          : [],
+      mediaType: parseMediaTypeField(json['media_type']),
+      mediaPaths: parseMediaPathsField(json['media_paths']),
     );
   }
 
-  /// 转换为JSON（API请求）
+  static DateTime _parseApiDateTime(dynamic v) {
+    final s = v.toString();
+    if (s.contains(' ') && !s.contains('T')) {
+      return DateTime.parse(s.replaceFirst(' ', 'T'));
+    }
+    return DateTime.parse(s);
+  }
+
+  static MediaType parseMediaTypeField(dynamic v) {
+    if (v is int) {
+      if (v >= 0 && v < MediaType.values.length) {
+        return MediaType.values[v];
+      }
+      return MediaType.text;
+    }
+    switch (v?.toString()) {
+      case 'image':
+        return MediaType.image;
+      case 'audio':
+        return MediaType.audio;
+      case 'video':
+        return MediaType.video;
+      case 'text':
+      default:
+        return MediaType.text;
+    }
+  }
+
+  static List<String> parseMediaPathsField(dynamic v) {
+    if (v == null) return [];
+    if (v is List) {
+      return v.map((e) => e.toString()).toList();
+    }
+    if (v is String) {
+      if (v.isEmpty) return [];
+      return v.split(',');
+    }
+    return [];
+  }
+
+  /// 创建时光时提交给后端的 JSON（与 CreateMomentRequest 一致）
+  Map<String, dynamic> toCreateApiJson() {
+    return {
+      'content': content,
+      'media_type': _apiMediaTypeString(),
+      'media_paths': mediaPaths,
+    };
+  }
+
+  String _apiMediaTypeString() {
+    switch (mediaType) {
+      case MediaType.text:
+        return 'text';
+      case MediaType.image:
+        return 'image';
+      case MediaType.audio:
+        return 'audio';
+      case MediaType.video:
+        return 'video';
+      case MediaType.mixed:
+        return 'text';
+    }
+  }
+
+  /// 转换为JSON（本地或其它用途，非创建接口）
   Map<String, dynamic> toJson() {
     return {
       'id': id,

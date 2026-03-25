@@ -247,6 +247,11 @@
 - [ ] 新增用户、编辑用户、禁用/启用、删除
 - [ ] 调用后端用户管理 API（需在阶段 3 扩展）
 
+### 6.3.1 用户时光查询（管理端）
+
+- [ ] 需求与计划以 [admin_user_moments_query.md](./admin_user_moments_query.md) 为准（接口：`GET /v1/admin/users/:user_id/moments`；前端路由 `/moments`，与用户页 `/users` 并列）
+- [ ] 侧栏「时光管理」、用户列表「查看时光」跳转、分页数据结构与管理端用户列表风格一致（`data.moments`）
+
 ### 6.4 角色与权限
 
 - [ ] 角色列表、新增/编辑角色

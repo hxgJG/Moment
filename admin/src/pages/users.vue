@@ -42,8 +42,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
+            <el-button type="success" link @click="handleViewMoments(row)">查看时光</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="warning" link @click="handleToggleStatus(row)">
               {{ row.status === 1 ? '禁用' : '启用' }}
@@ -101,8 +102,11 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserList, createUser, updateUser, deleteUser, toggleUserStatus } from '../api/user'
+
+const router = useRouter()
 
 const loading = ref(false)
 const tableData = ref([])
@@ -134,6 +138,10 @@ const formRules = {
 }
 
 const dialogTitle = computed(() => (form.id ? '编辑用户' : '新增用户'))
+
+function handleViewMoments(row) {
+  router.push({ path: '/moments', query: { user_id: String(row.id) } })
+}
 
 async function loadData() {
   loading.value = true

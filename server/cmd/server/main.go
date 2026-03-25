@@ -155,6 +155,7 @@ func registerRoutes(router *gin.Engine) {
 
 				// 用户管理
 				adminProtected.GET("/users", adminHandler.ListUsers)
+				adminProtected.GET("/users/:user_id/moments", adminHandler.ListUserMoments)
 				adminProtected.POST("/users", adminHandler.CreateUser)
 				adminProtected.PUT("/users/:id", adminHandler.UpdateUser)
 				adminProtected.DELETE("/users/:id", adminHandler.DeleteUser)

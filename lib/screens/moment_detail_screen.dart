@@ -432,8 +432,6 @@ class _VideoPlayer extends StatefulWidget {
 }
 
 class _VideoPlayerState extends State<_VideoPlayer> {
-  bool _showController = false;
-
   @override
   void initState() {
     super.initState();
@@ -445,47 +443,55 @@ class _VideoPlayerState extends State<_VideoPlayer> {
     if (!widget.isInitialized || widget.controller == null) {
       return Container(
         height: 200,
-        color: Colors.grey[200],
+        color: Colors.black,
         child: const Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(color: Colors.white),
         ),
       );
     }
 
-    return GestureDetector(
-      onTap: () {
-        setState(() => _showController = !_showController);
-      },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: widget.controller!.value.aspectRatio,
-            child: VideoPlayer(widget.controller!),
-          ),
-          if (_showController)
-            Container(
-              color: Colors.black38,
-              child: IconButton(
-                onPressed: () {
-                  setState(() {
-                    if (widget.controller!.value.isPlaying) {
-                      widget.controller!.pause();
-                    } else {
-                      widget.controller!.play();
-                    }
-                  });
-                },
-                icon: Icon(
-                  widget.controller!.value.isPlaying
-                      ? Icons.pause_circle
-                      : Icons.play_circle,
-                  size: 64,
-                  color: Colors.white,
-                ),
-              ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            if (widget.controller!.value.isPlaying) {
+              widget.controller!.pause();
+            } else {
+              widget.controller!.play();
+            }
+          });
+        },
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AspectRatio(
+              aspectRatio: widget.controller!.value.aspectRatio,
+              child: VideoPlayer(widget.controller!),
             ),
-        ],
+            // 未播放时显示中心播放按钮
+            ValueListenableBuilder<VideoPlayerValue>(
+              valueListenable: widget.controller!,
+              builder: (context, value, child) {
+                if (value.isPlaying) {
+                  return const SizedBox.shrink();
+                }
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: const Icon(
+                    Icons.play_arrow,
+                    size: 56,
+                    color: Colors.white,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

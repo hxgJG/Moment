@@ -159,6 +159,31 @@ class DatabaseService {
     );
   }
 
+  /// 将所有记录标为未同步（用于服务端校验修复后重新上传）
+  Future<int> resetAllMomentsSyncFlags() async {
+    final db = await database;
+    return db.rawUpdate('UPDATE moments SET synced = 0');
+  }
+
+  /// 同步成功后用服务端返回的记录替换本地行（主键从本地 UUID 变为服务端数字 id）
+  Future<void> replaceMomentAfterSync(String oldLocalId, MomentRecord serverRecord) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'moments',
+        where: 'id = ?',
+        whereArgs: [oldLocalId],
+      );
+      final map = serverRecord.toMap();
+      map['synced'] = 1;
+      await txn.insert(
+        'moments',
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  }
+
   /// 关闭数据库
   Future<void> close() async {
     final db = await database;

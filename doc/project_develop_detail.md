@@ -86,6 +86,7 @@
 | 模块 | 功能点 | 优先级 |
 |------|--------|--------|
 | 用户管理 | 用户列表、新增、编辑、禁用、删除 | P0 |
+| 用户时光查询 | 按用户查看其全部时光记录（管理端列表/筛选/详情）；详见 [admin_user_moments_query.md](./admin_user_moments_query.md) | P0 |
 | 角色管理 | 角色列表、权限分配 | P0 |
 | 权限管理 | 菜单/按钮级权限配置 | P0 |
 | 日志管理 | 操作日志、登录日志、审计日志 | P0 |
@@ -147,6 +148,116 @@
 └──────────────┘  └──────────────┘  └──────────────────┘
 ```
 
+### 2.1.1 项目层级架构
+
+以下从**角色与端 → 系统技术分层 → 仓库与后端内部分层**概括全项目结构，与 §1.2、§1.3、§2.3 一致。**Flutter 工程位于仓库根目录**（`lib/`、`android/`、`ios/`、`ohos/`），与下文 §2.3 目录树一致。
+
+#### 角色、端与功能域
+
+```mermaid
+flowchart TB
+  subgraph roles[用户角色]
+    R1[普通用户]
+    R2[管理员]
+    R3[超级管理员]
+  end
+  subgraph endpoints[使用端]
+    E1[移动端 App<br/>Flutter · 三端]
+    E2[Web 管理后台<br/>Vue 3 + Vite]
+  end
+  subgraph mobile[移动端功能域]
+    M1[时光 Tab · 列表/详情/同步]
+    M2[我的 Tab · 统计/设置]
+    M3[添加记录 · 文字/图/音/视频]
+    M4[登录注册 · 本地与云端]
+  end
+  subgraph admin[管理端功能域]
+    A1[用户与用户时光查询]
+    A2[角色与权限]
+    A3[日志与系统配置/统计]
+  end
+  R1 --> E1
+  R2 --> E2
+  R3 --> E2
+  E1 --> mobile
+  E2 --> admin
+```
+
+#### 系统技术分层（调用与数据流）
+
+```mermaid
+flowchart TB
+  subgraph clients[客户端层]
+    C1[Flutter App]
+    C2[Admin 前端]
+  end
+  subgraph access[接入层]
+    HTTPS[HTTPS]
+    GW[可选：网关 / 负载均衡 / 反向代理]
+  end
+  subgraph backend[后端服务 Golang]
+    H[handler 路由与入参]
+    MW[middleware 鉴权/日志/CORS 等]
+    SVC[service 业务逻辑]
+    REP[repository 数据访问]
+    MW --> H
+    H --> SVC
+    SVC --> REP
+  end
+  subgraph infra[基础设施]
+    DB[(MySQL / PostgreSQL)]
+    RD[(Redis)]
+    OBJ[对象存储 OSS/S3/MinIO]
+  end
+  C1 --> HTTPS
+  C2 --> HTTPS
+  HTTPS --> GW
+  GW --> MW
+  REP --> DB
+  REP --> RD
+  SVC --> OBJ
+```
+
+#### 仓库目录与后端内部分层
+
+```mermaid
+flowchart TB
+  subgraph repo[Moment 仓库根]
+    FL[Flutter：lib · android · ios · ohos<br/>pubspec.yaml]
+    SV[server：cmd · internal · pkg · configs · migrations]
+    AD[admin：src · dist · Vite 构建]
+    DOC[doc 文档]
+    SH[shell 脚本]
+    DK[docker-compose.yml 等]
+  end
+  subgraph server_internal[server/internal 典型分层]
+    HD[handler]
+    SV2[service]
+    RP[repository]
+    MD[model]
+    MDW[middleware]
+  end
+  SV --> server_internal
+```
+
+```text
+Moment/
+├── lib/                    # Flutter 源码（ screens / providers / services / models …）
+├── android/
+├── ios/
+├── ohos/
+├── server/
+│   ├── cmd/server/         # 入口 main
+│   ├── internal/           # handler → service → repository、model、middleware
+│   ├── pkg/                # jwt、response、config 等可复用包
+│   ├── configs/            # 配置 YAML
+│   └── migrations/         # SQL 迁移
+├── admin/                  # 管理端 Vue 源码与构建产物
+├── doc/                    # 项目文档
+├── shell/                  # 本地启动与运维脚本（可选）
+└── docker-compose.yml      # MySQL、Redis 等（见 §2.7）
+```
+
 ### 2.2 技术选型
 
 #### 2.2.1 移动端 (Flutter)
@@ -199,14 +310,15 @@
 
 #### 2.3.1 项目根目录
 
+本仓库 **Flutter 在仓库根目录**（无单独 `app/` 子目录）；下列树与 §2.1.1 一致。
+
 ```
 moment/
-├── app/                    # Flutter 移动端
-│   ├── lib/
-│   ├── android/
-│   ├── ios/
-│   ├── ohos/
-│   └── pubspec.yaml
+├── lib/                    # Flutter 移动端源码
+├── android/
+├── ios/
+├── ohos/
+├── pubspec.yaml
 ├── server/                 # Golang 后端
 │   ├── cmd/
 │   ├── internal/
@@ -219,7 +331,9 @@ moment/
 │   ├── package.json
 │   └── vite.config.ts
 ├── doc/                    # 文档
-└── docker/                 # Docker 配置
+├── shell/                  # 启动与运维脚本（可选）
+├── docker-compose.yml      # 开发依赖容器（根目录）
+└── admin/Dockerfile 等     # 按需的镜像定义
 ```
 
 #### 2.3.2 后端 (server/) 详细结构
@@ -247,10 +361,10 @@ server/
 └── migrations/             # 数据库迁移
 ```
 
-#### 2.3.3 Flutter (app/) 详细结构
+#### 2.3.3 Flutter (lib/) 详细结构
 
 ```
-app/lib/
+lib/
 ├── main.dart
 ├── app.dart
 ├── config/
@@ -409,4 +523,4 @@ cd app && flutter run -d android
 
 ---
 
-*文档版本：1.2 | 更新日期：2026-03*
+*文档版本：1.3 | 更新日期：2026-03*

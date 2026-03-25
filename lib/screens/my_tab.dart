@@ -37,6 +37,98 @@ class MyTab extends StatelessWidget {
                 _StatisticsCard(stats: stats),
                 const SizedBox(height: 24),
 
+                if (authProvider.isLoggedIn) ...[
+                  Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud_upload_outlined),
+                      title: const Text('同步到云端'),
+                      subtitle: const Text(
+                        '将本机未上传的时光提交到服务器，管理后台「时光管理」即可按用户查看',
+                      ),
+                      trailing: momentProvider.isSyncing
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.chevron_right),
+                      onTap: momentProvider.isSyncing
+                          ? null
+                          : () async {
+                              await momentProvider.syncToServer();
+                              if (!context.mounted) return;
+                              final u = momentProvider.lastSyncUploaded;
+                              final f = momentProvider.lastSyncFailed;
+                              final String msg;
+                              if (u == 0 && f == 0) {
+                                msg = '没有待同步记录（若后台仍无数据，可先「重置同步标记」再同步）';
+                              } else if (f == 0) {
+                                msg = '已成功上传 $u 条，可在管理后台按该用户 ID 查看';
+                              } else if (u == 0) {
+                                msg =
+                                    '本次上传失败 $f 条（常见原因：正文与媒体均为空、或未登录）。可点「重置同步标记」后重试';
+                              } else {
+                                msg = '成功 $u 条、失败 $f 条；失败原因见调试控制台';
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(msg)),
+                              );
+                            },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(Icons.replay_outlined),
+                      title: const Text('重置同步标记'),
+                      subtitle: const Text(
+                        '将全部时光标为「未同步」，便于在接口修复后重新上传到服务器',
+                      ),
+                      onTap: momentProvider.isSyncing
+                          ? null
+                          : () async {
+                              final ok = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('重置同步标记'),
+                                  content: const Text(
+                                    '确定将所有本地记录标为未同步？下次「同步到云端」会逐条重新上传（服务端可能产生重复时请谨慎）。',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(false),
+                                      child: const Text('取消'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(true),
+                                      child: const Text('确定'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (ok != true || !context.mounted) return;
+                              final n =
+                                  await momentProvider.resetAllMomentsSyncFlags();
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('已重置 $n 条记录的同步标记')),
+                              );
+                            },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
                 // 功能列表
                 _SettingsSection(
                   onLogout: () => _handleLogout(context, authProvider),
@@ -134,6 +226,14 @@ class _UserCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'ID：${u.id}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
                     ),
                   ),
                 ],

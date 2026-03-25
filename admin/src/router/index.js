@@ -36,6 +36,12 @@ const routes = [
         name: 'Logs',
         component: () => import('../pages/logs.vue'),
         meta: { title: '日志管理' }
+      },
+      {
+        path: 'moments',
+        name: 'Moments',
+        component: () => import('../pages/moments.vue'),
+        meta: { title: '时光管理' }
       }
     ]
   }

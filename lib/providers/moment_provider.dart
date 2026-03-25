@@ -38,6 +38,13 @@ class MomentProvider extends ChangeNotifier {
   /// 同步状态
   bool get isSyncing => _isSyncing;
 
+  /// 最近一次同步结果（便于 UI 提示）
+  int get lastSyncUploaded => _lastSyncUploaded;
+  int get lastSyncFailed => _lastSyncFailed;
+
+  int _lastSyncUploaded = 0;
+  int _lastSyncFailed = 0;
+
   /// 是否有更多数据
   bool get hasMore => _hasMore;
 
@@ -86,8 +93,11 @@ class MomentProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['data'] ?? [];
-        final newMoments = data.map((json) => MomentRecord.fromJson(json)).toList();
+        final page = _unwrapApiData(response.data);
+        final List<dynamic> rawList = _pageListFromData(page);
+        final newMoments = rawList
+            .map((e) => MomentRecord.fromApiMap(Map<String, dynamic>.from(e as Map)))
+            .toList();
 
         if (newMoments.isNotEmpty) {
           _moments.addAll(newMoments);
@@ -206,38 +216,78 @@ class MomentProvider extends ChangeNotifier {
     }
   }
 
-  /// 同步数据到服务器
+  bool _apiEnvelopeSuccess(dynamic body) {
+    if (body is! Map) return false;
+    final c = body['code'];
+    return c == 200 || c == 200.0;
+  }
+
+  /// 同步数据到服务器；返回是否至少有一条成功上传
   Future<bool> syncToServer() async {
     if (_isSyncing) return false;
 
     _isSyncing = true;
+    _lastSyncUploaded = 0;
+    _lastSyncFailed = 0;
     notifyListeners();
 
     try {
-      // 获取未同步的记录
       final unsyncedRecords = await _dbService.getUnsyncedMoments();
 
       for (final record in unsyncedRecords) {
         try {
-          final response = await _api.post('/moments', data: record.toJson());
-          if (response.statusCode == 200 || response.statusCode == 201) {
-            // 标记为已同步
-            await _dbService.markAsSynced(record.id);
+          final response =
+              await _api.post('/moments', data: record.toCreateApiJson());
+          // 业务错误时服务端仍可能 HTTP 200 + body.code!=200
+          final ok =
+              response.data is Map && _apiEnvelopeSuccess(response.data);
+          if (ok) {
+            final data = (response.data as Map)['data'];
+            if (data is Map) {
+              final server = MomentRecord.fromApiMap(
+                Map<String, dynamic>.from(data),
+              );
+              await _dbService.replaceMomentAfterSync(record.id, server);
+            } else {
+              await _dbService.markAsSynced(record.id);
+            }
+            _lastSyncUploaded++;
+          } else {
+            _lastSyncFailed++;
+            final msg = response.data is Map
+                ? (response.data as Map)['msg']
+                : null;
+            debugPrint(
+              '同步记录 ${record.id} 失败: HTTP ${response.statusCode} msg=$msg',
+            );
           }
         } catch (e) {
+          _lastSyncFailed++;
           debugPrint('同步记录 ${record.id} 失败: $e');
         }
       }
 
+      _moments = await _dbService.getAllMoments();
+      _statistics = await _dbService.getStatistics();
+
       _isSyncing = false;
       notifyListeners();
-      return true;
+      return _lastSyncUploaded > 0;
     } catch (e) {
       debugPrint('同步失败: $e');
       _isSyncing = false;
       notifyListeners();
       return false;
     }
+  }
+
+  /// 全部标为未同步（修复历史误标后重新上传）
+  Future<int> resetAllMomentsSyncFlags() async {
+    final n = await _dbService.resetAllMomentsSyncFlags();
+    _moments = await _dbService.getAllMoments();
+    _statistics = await _dbService.getStatistics();
+    notifyListeners();
+    return n;
   }
 
   /// 从服务器拉取数据并合并
@@ -250,8 +300,11 @@ class MomentProvider extends ChangeNotifier {
     try {
       final response = await _api.get('/moments');
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data['data'] ?? [];
-        final remoteMoments = data.map((json) => MomentRecord.fromJson(json)).toList();
+        final page = _unwrapApiData(response.data);
+        final List<dynamic> rawList = _pageListFromData(page);
+        final remoteMoments = rawList
+            .map((e) => MomentRecord.fromApiMap(Map<String, dynamic>.from(e as Map)))
+            .toList();
 
         // 合并数据：以服务器时间最新为准
         await _mergeMoments(remoteMoments);
@@ -305,4 +358,22 @@ class MomentProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+}
+
+/// 解析统一响应 { code, data }
+Map<String, dynamic>? _unwrapApiData(dynamic body) {
+  if (body is! Map) return null;
+  if (body['code'] != 200) return null;
+  final d = body['data'];
+  if (d is Map<String, dynamic>) return d;
+  if (d is Map) return Map<String, dynamic>.from(d);
+  return null;
+}
+
+/// 分页接口的 list 字段；兼容旧版误把 data 当数组
+List<dynamic> _pageListFromData(Map<String, dynamic>? data) {
+  if (data == null) return [];
+  final list = data['list'];
+  if (list is List) return list;
+  return [];
 }

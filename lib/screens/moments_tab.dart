@@ -1,7 +1,10 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
 
@@ -325,13 +328,17 @@ class _MediaPreview extends StatelessWidget {
       height: 80,
       child: Row(
         children: [
-          ...displayPaths.map((path) => Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: _buildPreviewItem(path),
-            ),
-          )),
+          ...displayPaths.asMap().entries.map((entry) {
+            final index = entry.key;
+            final path = entry.value;
+            return Padding(
+              padding: EdgeInsets.only(right: index < displayPaths.length - 1 ? 8 : 0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: _buildPreviewItem(path),
+              ),
+            );
+          }),
           if (mediaPaths.length > 3)
             Container(
               width: 80,
@@ -356,6 +363,10 @@ class _MediaPreview extends StatelessWidget {
   }
 
   Widget _buildPreviewItem(String path) {
+    // 根据文件扩展名判断类型
+    final isImage = _isImageFile(path);
+    final isVideo = _isVideoFile(path);
+
     if (mediaType == MediaType.audio) {
       return Container(
         width: 80,
@@ -369,30 +380,122 @@ class _MediaPreview extends StatelessWidget {
       );
     }
 
-    return Image.asset(
-      path,
+    if (isVideo || mediaType == MediaType.video) {
+      return _VideoThumbnail(path: path);
+    }
+
+    if (isImage || mediaType == MediaType.image) {
+      return Image.file(
+        File(path),
+        width: 80,
+        height: 80,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: 80,
+            height: 80,
+            color: Colors.grey[200],
+            child: const Icon(
+              Icons.broken_image,
+              color: Colors.grey,
+            ),
+          );
+        },
+      );
+    }
+
+    // 混合类型或其他
+    return Container(
       width: 80,
       height: 80,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Image.network(
-          path,
-          width: 80,
-          height: 80,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
+      color: Colors.grey[200],
+      child: const Icon(
+        Icons.insert_drive_file,
+        color: Colors.grey,
+      ),
+    );
+  }
+
+  bool _isImageFile(String path) {
+    final ext = path.toLowerCase();
+    return ext.endsWith('.jpg') ||
+        ext.endsWith('.jpeg') ||
+        ext.endsWith('.png') ||
+        ext.endsWith('.gif') ||
+        ext.endsWith('.webp') ||
+        ext.endsWith('.bmp');
+  }
+
+  bool _isVideoFile(String path) {
+    final ext = path.toLowerCase();
+    return ext.endsWith('.mp4') ||
+        ext.endsWith('.mov') ||
+        ext.endsWith('.avi') ||
+        ext.endsWith('.mkv') ||
+        ext.endsWith('.webm');
+  }
+}
+
+/// 视频缩略图组件
+class _VideoThumbnail extends StatefulWidget {
+  final String path;
+
+  const _VideoThumbnail({required this.path});
+
+  @override
+  State<_VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<_VideoThumbnail> {
+  Uint8List? _thumbnailData;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateThumbnail();
+  }
+
+  Future<void> _generateThumbnail() async {
+    try {
+      final thumbnail = await VideoThumbnail.thumbnailData(
+        video: widget.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 160,
+        quality: 75,
+      );
+      if (mounted && thumbnail != null) {
+        setState(() {
+          _thumbnailData = thumbnail;
+        });
+      }
+    } catch (e) {
+      // 缩略图生成失败，保持空白
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 80,
+      color: Colors.grey[800],
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (_thumbnailData != null)
+            Image.memory(
+              _thumbnailData!,
               width: 80,
               height: 80,
-              color: Colors.grey[200],
-              child: const Icon(
-                Icons.broken_image,
-                color: Colors.grey,
-              ),
-            );
-          },
-        );
-      },
+              fit: BoxFit.cover,
+            ),
+          const Icon(
+            Icons.play_circle_outline,
+            color: Colors.white,
+            size: 32,
+          ),
+        ],
+      ),
     );
   }
 }

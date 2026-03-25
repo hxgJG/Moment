@@ -3,28 +3,33 @@ package handler
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/moment-server/moment-server/internal/middleware"
+	"github.com/moment-server/moment-server/internal/model"
+	"github.com/moment-server/moment-server/internal/repository"
 	"github.com/moment-server/moment-server/internal/service"
 	"github.com/moment-server/moment-server/pkg/response"
 )
 
 // AdminHandler 管理端处理器
 type AdminHandler struct {
-	userService  *service.UserService
-	roleService  *service.RoleService
+	userService       *service.UserService
+	roleService       *service.RoleService
 	permissionService *service.PermissionService
-	logService   *service.LogService
+	logService        *service.LogService
+	momentService     *service.MomentService
 }
 
 // NewAdminHandler 创建管理端处理器
 func NewAdminHandler() *AdminHandler {
 	return &AdminHandler{
-		userService:  service.NewUserService(),
-		roleService:  service.NewRoleService(),
+		userService:       service.NewUserService(),
+		roleService:       service.NewRoleService(),
 		permissionService: service.NewPermissionService(),
-		logService:   service.NewLogService(),
+		logService:        service.NewLogService(),
+		momentService:     service.NewMomentService(),
 	}
 }
 
@@ -110,6 +115,106 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	}
 
 	response.Success(c, result)
+}
+
+// ListUserMoments 管理端查询指定用户的时光列表
+// @Summary 管理端查询用户时光列表
+// @Tags admin
+// @Produce json
+// @Security BearerAuth
+// @Param user_id path int true "用户ID"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Param media_type query string false "媒体类型"
+// @Param keyword query string false "内容关键词"
+// @Param created_from query string false "开始时间 YYYY-MM-DD 或 RFC3339"
+// @Param created_to query string false "结束日期 YYYY-MM-DD（含当日）或 RFC3339 截止时刻"
+// @Param include_deleted query string false "1/true 包含已软删"
+// @Success 200 {object} response.Response{data=service.AdminMomentListResponse}
+// @Router /v1/admin/users/{user_id}/moments [get]
+func (h *AdminHandler) ListUserMoments(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的用户ID")
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+
+	user, err := h.userService.GetUserByID(userID)
+	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			response.NotFound(c, "用户不存在")
+			return
+		}
+		response.InternalServerError(c, err.Error())
+		return
+	}
+
+	mediaType := c.Query("media_type")
+	if mediaType != "" {
+		switch model.MediaType(mediaType) {
+		case model.MediaTypeText, model.MediaTypeImage, model.MediaTypeAudio, model.MediaTypeVideo:
+		default:
+			response.BadRequest(c, "无效的 media_type")
+			return
+		}
+	}
+
+	filter := repository.AdminMomentFilter{
+		UserID:    userID,
+		MediaType: mediaType,
+		Keyword:   c.Query("keyword"),
+	}
+	inc := c.Query("include_deleted")
+	filter.IncludeDeleted = inc == "1" || inc == "true"
+
+	if err := applyAdminMomentTimeQuery(c.Query("created_from"), c.Query("created_to"), &filter); err != nil {
+		response.BadRequest(c, "无效的时间参数")
+		return
+	}
+
+	result, err := h.momentService.ListMomentsForAdmin(filter, page, pageSize)
+	if err != nil {
+		response.InternalServerError(c, err.Error())
+		return
+	}
+	result.User = user
+
+	response.Success(c, result)
+}
+
+func applyAdminMomentTimeQuery(createdFrom, createdTo string, f *repository.AdminMomentFilter) error {
+	if createdFrom != "" {
+		t, err := time.ParseInLocation("2006-01-02", createdFrom, time.Local)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, createdFrom)
+			if err != nil {
+				return err
+			}
+		}
+		f.CreatedFrom = &t
+	}
+	if createdTo != "" {
+		if t, err := time.ParseInLocation("2006-01-02", createdTo, time.Local); err == nil {
+			end := t.AddDate(0, 0, 1)
+			f.CreatedToEnd = &end
+		} else {
+			t2, err2 := time.Parse(time.RFC3339, createdTo)
+			if err2 != nil {
+				return err2
+			}
+			f.CreatedToInclusive = &t2
+		}
+	}
+	return nil
 }
 
 // CreateUser 创建用户

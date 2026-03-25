@@ -19,6 +19,11 @@
           <span>用户管理</span>
         </el-menu-item>
 
+        <el-menu-item index="/moments">
+          <el-icon><Clock /></el-icon>
+          <span>时光管理</span>
+        </el-menu-item>
+
         <el-menu-item index="/roles">
           <el-icon><Key /></el-icon>
           <span>角色管理</span>
@@ -83,6 +88,7 @@ const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => {
   const menuMap = {
     '/users': '用户管理',
+    '/moments': '时光管理',
     '/roles': '角色管理',
     '/permissions': '权限管理',
     '/logs': '日志管理'

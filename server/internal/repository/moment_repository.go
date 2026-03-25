@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/moment-server/moment-server/internal/model"
 	"gorm.io/gorm"
 )
@@ -20,6 +22,17 @@ type MomentFilter struct {
 	UserID uint64
 }
 
+// AdminMomentFilter 管理端按用户查询时光
+type AdminMomentFilter struct {
+	UserID               uint64
+	MediaType            string // 空表示不限
+	CreatedFrom          *time.Time
+	CreatedToEnd         *time.Time // 上界（不含），用于按自然日区间
+	CreatedToInclusive   *time.Time // 若设置：created_at <= 该时刻（用于 RFC3339）
+	Keyword              string
+	IncludeDeleted       bool
+}
+
 // Create 创建记录
 func (r *MomentRepository) Create(moment *model.Moment) error {
 	return r.db.Create(moment).Error
@@ -28,7 +41,7 @@ func (r *MomentRepository) Create(moment *model.Moment) error {
 // FindByID 按ID查询
 func (r *MomentRepository) FindByID(id uint64) (*model.Moment, error) {
 	var moment model.Moment
-	err := r.db.Where("id = ?", id).First(&moment).Error
+	err := r.db.Where("id = ? AND deleted_at IS NULL", id).First(&moment).Error
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +53,7 @@ func (r *MomentRepository) FindAll(filter MomentFilter, page, pageSize int) ([]*
 	var moments []*model.Moment
 	var total int64
 
-	query := r.db.Model(&model.Moment{})
+	query := r.db.Model(&model.Moment{}).Where("deleted_at IS NULL")
 	if filter.UserID > 0 {
 		query = query.Where("user_id = ?", filter.UserID)
 	}
@@ -53,6 +66,44 @@ func (r *MomentRepository) FindAll(filter MomentFilter, page, pageSize int) ([]*
 	// 分页查询
 	offset := (page - 1) * pageSize
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&moments).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return moments, total, nil
+}
+
+// FindForAdmin 管理端分页查询某用户时光（显式处理 deleted_at，与 ORM 软删字段类型无关）
+func (r *MomentRepository) FindForAdmin(f AdminMomentFilter, page, pageSize int) ([]*model.Moment, int64, error) {
+	var moments []*model.Moment
+	var total int64
+
+	query := r.db.Model(&model.Moment{}).Where("user_id = ?", f.UserID)
+	if !f.IncludeDeleted {
+		query = query.Where("deleted_at IS NULL")
+	}
+	if f.MediaType != "" {
+		query = query.Where("media_type = ?", f.MediaType)
+	}
+	if f.CreatedFrom != nil {
+		query = query.Where("created_at >= ?", *f.CreatedFrom)
+	}
+	if f.CreatedToEnd != nil {
+		query = query.Where("created_at < ?", *f.CreatedToEnd)
+	}
+	if f.CreatedToInclusive != nil {
+		query = query.Where("created_at <= ?", *f.CreatedToInclusive)
+	}
+	if f.Keyword != "" {
+		like := "%" + f.Keyword + "%"
+		query = query.Where("content LIKE ?", like)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&moments).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -72,7 +123,7 @@ func (r *MomentRepository) Delete(id, userID uint64) error {
 // CountByUserID 统计用户记录数
 func (r *MomentRepository) CountByUserID(userID uint64) (int64, error) {
 	var count int64
-	err := r.db.Model(&model.Moment{}).Where("user_id = ?", userID).Count(&count).Error
+	err := r.db.Model(&model.Moment{}).Where("user_id = ? AND deleted_at IS NULL", userID).Count(&count).Error
 	return count, err
 }
 
@@ -86,7 +137,7 @@ func (r *MomentRepository) CountByMediaType(userID uint64) (map[model.MediaType]
 	var results []Result
 	err := r.db.Model(&model.Moment{}).
 		Select("media_type, COUNT(*) as count").
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND deleted_at IS NULL", userID).
 		Group("media_type").
 		Find(&results).Error
 

@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/moment-server/moment-server/internal/middleware"
@@ -78,6 +79,11 @@ func (h *MomentHandler) CreateMoment(c *gin.Context) {
 	// 设置默认 media_type
 	if req.MediaType == "" {
 		req.MediaType = model.MediaTypeText
+	}
+
+	if strings.TrimSpace(req.Content) == "" && len(req.MediaPaths) == 0 {
+		response.BadRequest(c, "内容和媒体不能同时为空")
+		return
 	}
 
 	result, err := h.momentService.CreateMoment(userID, &req)
