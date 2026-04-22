@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moment/models/moment_record.dart';
 import 'package:moment/providers/moment_provider.dart';
@@ -562,6 +563,9 @@ class _FakeMomentApiClient implements MomentApiClient {
     }
     return null;
   }
+
+  @override
+  String getErrorMessage(DioException error) => '请求失败';
 
   @override
   Future<ApiCallResult> get(

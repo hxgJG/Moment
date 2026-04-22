@@ -246,117 +246,179 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
   @override
   Widget build(BuildContext context) {
     final conflictRemoteUpdatedAt = _originalRecord?.conflictRemoteUpdatedAt;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('编辑记录'),
-            Text(
-              '继续雕琢这块回忆玻璃',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black.withOpacity(0.55),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _saveMoment,
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('保存'),
-          ),
-        ],
-      ),
+      extendBody: true,
       body: LiquidGlassBackground(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        child: SafeArea(
+          bottom: false,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_originalRecord?.syncStatus == SyncStatus.conflict) ...[
-                LiquidGlassCard(
-                  tintColor: const Color(0xFFFFE0B2),
-                  child: Row(
+              _EditorPageHeader(
+                title: '编辑记录',
+                subtitle: '继续雕琢这块回忆玻璃',
+                action: TextButton(
+                  onPressed: _isSaving ? null : _saveMoment,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('保存'),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 32),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.sync_problem_outlined,
-                        color: Colors.orange[800],
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          conflictRemoteUpdatedAt != null
-                              ? '这条记录当前处于同步冲突状态。系统检测到云端版本在 ${conflictRemoteUpdatedAt.toLocal()} 后发生了更新；继续编辑会保留本地版本，并在你确认后用于覆盖云端。'
-                              : '这条记录当前处于同步冲突状态。继续编辑会保留本地版本，并在你确认后用于覆盖云端。',
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.5,
-                            color: Colors.orange[800],
+                      if (_originalRecord?.syncStatus ==
+                          SyncStatus.conflict) ...[
+                        LiquidGlassCard(
+                          tintColor: const Color(0xFFFFE0B2),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.sync_problem_outlined,
+                                color: Colors.orange[800],
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  conflictRemoteUpdatedAt != null
+                                      ? '这条记录当前处于同步冲突状态。系统检测到云端版本在 ${conflictRemoteUpdatedAt.toLocal()} 后发生了更新；继续编辑会保留本地版本，并在你确认后用于覆盖云端。'
+                                      : '这条记录当前处于同步冲突状态。继续编辑会保留本地版本，并在你确认后用于覆盖云端。',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    height: 1.5,
+                                    color: Colors.orange[800],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      LiquidGlassCard(
+                        child: TextField(
+                          controller: _contentController,
+                          maxLines: 7,
+                          decoration: const InputDecoration(
+                            hintText: '记录今天的点滴...',
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_mediaPaths.isNotEmpty) ...[
+                        LiquidGlassCard(
+                          child: _MediaPreviewGrid(
+                            mediaPaths: _mediaPaths,
+                            onRemove: _removeMedia,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      LiquidGlassCard(
+                        tintColor: const Color(0xFFFFE6C7),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '添加媒体',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _MediaButtons(
+                              isRecording: _isRecording,
+                              onPickImage: () =>
+                                  _pickImage(ImageSource.gallery),
+                              onPickCameraImage: () =>
+                                  _pickImage(ImageSource.camera),
+                              onPickVideo: () =>
+                                  _pickVideo(ImageSource.gallery),
+                              onPickCameraVideo: () =>
+                                  _pickVideo(ImageSource.camera),
+                              onStartRecording: _startRecording,
+                              onStopRecording: _stopRecording,
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
-              LiquidGlassCard(
-                child: TextField(
-                  controller: _contentController,
-                  maxLines: 7,
-                  decoration: const InputDecoration(
-                    hintText: '记录今天的点滴...',
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_mediaPaths.isNotEmpty) ...[
-                LiquidGlassCard(
-                  child: _MediaPreviewGrid(
-                    mediaPaths: _mediaPaths,
-                    onRemove: _removeMedia,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              LiquidGlassCard(
-                tintColor: const Color(0xFFFFE6C7),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '添加媒体',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _MediaButtons(
-                      isRecording: _isRecording,
-                      onPickImage: () => _pickImage(ImageSource.gallery),
-                      onPickCameraImage: () => _pickImage(ImageSource.camera),
-                      onPickVideo: () => _pickVideo(ImageSource.gallery),
-                      onPickCameraVideo: () => _pickVideo(ImageSource.camera),
-                      onStartRecording: _startRecording,
-                      onStopRecording: _stopRecording,
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditorPageHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget action;
+
+  const _EditorPageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: LiquidGlassCard(
+        padding: const EdgeInsets.fromLTRB(10, 10, 6, 10),
+        borderRadius: BorderRadius.circular(24),
+        tintColor: const Color(0xFFF6FAFF),
+        blurSigma: 18,
+        child: Row(
+          children: [
+            LiquidGlassIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              onPressed: () => context.pop(),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: kLiquidGlassMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            action,
+          ],
         ),
       ),
     );
@@ -480,37 +542,37 @@ class _MediaButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+      spacing: 10,
+      runSpacing: 10,
       children: [
         _MediaButton(
           icon: Icons.photo_library,
           label: '相册图片',
-          color: Colors.green,
+          color: const Color(0xFF5BAE68),
           onTap: onPickImage,
         ),
         _MediaButton(
           icon: Icons.camera_alt,
           label: '拍照',
-          color: Colors.blue,
+          color: const Color(0xFF4D8FF7),
           onTap: onPickCameraImage,
         ),
         _MediaButton(
           icon: Icons.videocam,
           label: '视频',
-          color: Colors.red,
+          color: const Color(0xFFF06A5F),
           onTap: onPickVideo,
         ),
         _MediaButton(
           icon: Icons.videocam_outlined,
           label: '录像',
-          color: Colors.orange,
+          color: const Color(0xFFE6A14A),
           onTap: onPickCameraVideo,
         ),
         _MediaButton(
           icon: isRecording ? Icons.stop : Icons.mic,
           label: isRecording ? '停止' : '录音',
-          color: Colors.purple,
+          color: const Color(0xFF8B67D6),
           onTap: isRecording ? onStopRecording : onStartRecording,
           isActive: isRecording,
         ),
@@ -538,23 +600,36 @@ class _MediaButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LiquidGlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      borderRadius: BorderRadius.circular(18),
-      tintColor: isActive ? color.withOpacity(0.18) : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      borderRadius: BorderRadius.circular(20),
+      tintColor: isActive ? color.withOpacity(0.16) : const Color(0xFFF7FAFF),
       onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w600,
+      child: SizedBox(
+        width: 144,
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withOpacity(isActive ? 0.22 : 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 20),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: kLiquidGlassInk,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

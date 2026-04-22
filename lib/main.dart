@@ -177,8 +177,9 @@ class _AppWithRouter extends StatelessWidget {
           ),
         ),
         dialogTheme: DialogTheme(
-          backgroundColor: Colors.white.withOpacity(0.26),
+          backgroundColor: Colors.white.withOpacity(0.92),
           surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.black.withOpacity(0.12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(28),
             side: BorderSide(color: Colors.white.withOpacity(0.42)),

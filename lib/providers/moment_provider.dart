@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/moment_record.dart';
@@ -50,6 +51,7 @@ abstract class MomentApiClient {
   bool isSuccessEnvelope(dynamic body);
   Map<String, dynamic>? unwrapEnvelopeData(dynamic body);
   String? envelopeMessage(dynamic body);
+  String getErrorMessage(DioException error);
 }
 
 abstract class MomentDatabase {
@@ -119,6 +121,9 @@ class _ApiServiceAdapter implements MomentApiClient {
 
   @override
   String? envelopeMessage(dynamic body) => _api.envelopeMessage(body);
+
+  @override
+  String getErrorMessage(DioException error) => _api.getErrorMessage(error);
 
   @override
   Future<ApiCallResult> get(
@@ -662,7 +667,10 @@ class MomentProvider extends ChangeNotifier {
           }
         } catch (e) {
           _lastSyncFailed++;
-          _lastUploadError = e.toString();
+          _lastUploadError = _friendlyErrorMessage(
+            e,
+            fallback: '上传失败，请稍后重试',
+          );
           debugPrint('同步记录 ${record.id} 失败: $e');
         }
       }
@@ -676,7 +684,10 @@ class MomentProvider extends ChangeNotifier {
       return _lastSyncUploaded > 0;
     } catch (e) {
       debugPrint('同步失败: $e');
-      _lastUploadError = e.toString();
+      _lastUploadError = _friendlyErrorMessage(
+        e,
+        fallback: '同步失败，请稍后重试',
+      );
       _isSyncing = false;
       _activeSyncLabel = null;
       notifyListeners();
@@ -780,7 +791,10 @@ class MomentProvider extends ChangeNotifier {
       return resolved;
     } catch (e) {
       debugPrint('使用云端版本解决冲突失败: $e');
-      _lastFetchError = e.toString();
+      _lastFetchError = _friendlyErrorMessage(
+        e,
+        fallback: '同步失败，请稍后重试',
+      );
       _isSyncing = false;
       _activeSyncLabel = null;
       notifyListeners();
@@ -837,7 +851,10 @@ class MomentProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('使用云端版本解决单条冲突失败: $e');
-      _lastFetchError = e.toString();
+      _lastFetchError = _friendlyErrorMessage(
+        e,
+        fallback: '同步失败，请稍后重试',
+      );
       _isSyncing = false;
       _activeSyncLabel = null;
       notifyListeners();
@@ -871,7 +888,10 @@ class MomentProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('拉取数据失败: $e');
-      _lastFetchError = e.toString();
+      _lastFetchError = _friendlyErrorMessage(
+        e,
+        fallback: '拉取失败，请稍后重试',
+      );
       _isSyncing = false;
       _activeSyncLabel = null;
       notifyListeners();
@@ -1065,6 +1085,17 @@ class MomentProvider extends ChangeNotifier {
       throw StateError('服务端未返回时光详情');
     }
     return MomentRecord.fromApiMap(data);
+  }
+
+  String _friendlyErrorMessage(Object error, {required String fallback}) {
+    if (error is DioException) {
+      return _api.getErrorMessage(error);
+    }
+    final raw = error.toString().trim();
+    if (raw.isEmpty || raw.length > 120) {
+      return fallback;
+    }
+    return raw;
   }
 
   bool _momentNeedsRemoteUpdate(MomentRecord local, MomentRecord remote) {

@@ -16,50 +16,37 @@ class MyTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('我的'),
-            Text(
-              '账户、统计与同步控制台',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black.withOpacity(0.55),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
       body: Consumer2<AuthProvider, MomentProvider>(
         builder: (context, authProvider, momentProvider, child) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 150),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _UserCard(
-                  user: authProvider.user,
-                  onLogin: authProvider.isLoggedIn
-                      ? null
-                      : () => context.go('/login'),
-                ),
-                const SizedBox(height: 16),
-                _StatisticsCard(stats: momentProvider.statistics),
-                const SizedBox(height: 16),
-                if (authProvider.isLoggedIn) ...[
-                  _SyncStatusCard(momentProvider: momentProvider),
+          return SafeArea(
+            bottom: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 150),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _UserCard(
+                    user: authProvider.user,
+                    onLogin: authProvider.isLoggedIn
+                        ? null
+                        : () => context.go('/login'),
+                  ),
                   const SizedBox(height: 16),
-                  _SyncActionGroup(momentProvider: momentProvider),
+                  _StatisticsCard(stats: momentProvider.statistics),
                   const SizedBox(height: 16),
+                  if (authProvider.isLoggedIn) ...[
+                    _SyncStatusCard(momentProvider: momentProvider),
+                    const SizedBox(height: 16),
+                    _SyncActionGroup(momentProvider: momentProvider),
+                    const SizedBox(height: 16),
+                  ],
+                  _SettingsSection(
+                    isLoggedIn: authProvider.isLoggedIn,
+                    onLogin: () => context.go('/login'),
+                    onLogout: () => _handleLogout(context, authProvider),
+                  ),
                 ],
-                _SettingsSection(
-                  isLoggedIn: authProvider.isLoggedIn,
-                  onLogin: () => context.go('/login'),
-                  onLogout: () => _handleLogout(context, authProvider),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -244,16 +231,33 @@ class _StatisticsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LiquidGlassCard(
-      tintColor: const Color(0xFFFFE6C7),
+      tintColor: const Color(0xFFDCE8FF),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '记录统计',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+          const Row(
+            children: [
+              Text(
+                '记录统计',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Spacer(),
+              LiquidGlassPill(
+                tintColor: Color(0xFFEAF1FF),
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Text(
+                  '内容分布',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: kLiquidGlassMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Center(
@@ -262,7 +266,7 @@ class _StatisticsCard extends StatelessWidget {
                 Text(
                   '${stats['total'] ?? 0}',
                   style: const TextStyle(
-                    fontSize: 48,
+                    fontSize: 44,
                     fontWeight: FontWeight.w700,
                     color: kLiquidGlassAccent,
                   ),
@@ -279,39 +283,38 @@ class _StatisticsCard extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Wrap(
-            spacing: 18,
-            runSpacing: 16,
-            alignment: WrapAlignment.spaceAround,
+            spacing: 10,
+            runSpacing: 10,
             children: [
               _StatItem(
                 icon: Icons.text_fields,
                 label: '文字',
                 count: stats['text'] ?? 0,
-                color: Colors.blue,
+                color: const Color(0xFF7393D8),
               ),
               _StatItem(
                 icon: Icons.image,
                 label: '图片',
                 count: stats['image'] ?? 0,
-                color: Colors.green,
+                color: const Color(0xFF79A883),
               ),
               _StatItem(
                 icon: Icons.mic,
                 label: '音频',
                 count: stats['audio'] ?? 0,
-                color: Colors.orange,
+                color: const Color(0xFFC19563),
               ),
               _StatItem(
                 icon: Icons.videocam,
                 label: '视频',
                 count: stats['video'] ?? 0,
-                color: Colors.red,
+                color: const Color(0xFFCA7C73),
               ),
               _StatItem(
                 icon: Icons.layers,
                 label: '混合',
                 count: stats['mixed'] ?? 0,
-                color: Colors.purple,
+                color: const Color(0xFF8D79BB),
               ),
             ],
           ),
@@ -671,35 +674,44 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              shape: BoxShape.circle,
+    return LiquidGlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      borderRadius: BorderRadius.circular(20),
+      tintColor: color.withOpacity(0.12),
+      child: SizedBox(
+        width: 88,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.16),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: color, size: 18),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: color,
+            const SizedBox(height: 12),
+            Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: kLiquidGlassInk,
+              ),
             ),
-          ),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: kLiquidGlassMuted,
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: kLiquidGlassMuted,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -748,33 +760,89 @@ class _SettingsSection extends StatelessWidget {
   void _showAboutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.access_time, color: kLiquidGlassAccent),
-            SizedBox(width: 8),
-            Text('拾光记'),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('版本: 1.0.0'),
-            SizedBox(height: 8),
-            Text(
-              '记录生活的点滴，留住美好的时光。',
-              style: TextStyle(color: kLiquidGlassMuted),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
+      builder: (dialogContext) {
+        final mediaQuery = MediaQuery.of(dialogContext);
+
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          backgroundColor: Colors.white.withOpacity(0.9),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
           ),
-        ],
-      ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 380,
+              maxHeight:
+                  mediaQuery.size.height - mediaQuery.padding.vertical - 120,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time, color: kLiquidGlassAccent),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          '拾光记',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: '关闭',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '版本 1.0.0',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          Text(
+                            '记录生活的点滴，留住美好的时光。',
+                            style: TextStyle(
+                              color: kLiquidGlassMuted,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonal(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('知道了'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -905,75 +973,130 @@ class _StorageManagementDialogState extends State<_StorageManagementDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('存储管理'),
-      content: SizedBox(
-        width: 360,
-        child: _isLoading
-            ? const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            : _error != null
-                ? Text(_error!)
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _StorageMetricRow(
-                        label: '本地媒体文件',
-                        value: '${_report!.totalFileCount} 个',
+    final mediaQuery = MediaQuery.of(context);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: Colors.white.withOpacity(0.9),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: mediaQuery.size.height - mediaQuery.padding.vertical - 96,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '存储管理',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
                       ),
-                      _StorageMetricRow(
-                        label: '总占用',
-                        value: _formatBytes(_report!.totalBytes),
-                      ),
-                      _StorageMetricRow(
-                        label: '已被记录引用',
-                        value:
-                            '${_report!.referencedFileCount} 个 · ${_formatBytes(_report!.referencedBytes)}',
-                      ),
-                      _StorageMetricRow(
-                        label: '可清理垃圾文件',
-                        value:
-                            '${_report!.orphanFileCount} 个 · ${_formatBytes(_report!.orphanBytes)}',
-                        isWarning: _report!.orphanFileCount > 0,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        '清理只会删除当前已经没有任何记录引用的本地媒体文件，不影响正常内容。',
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          color: kLiquidGlassMuted,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
+                  IconButton(
+                    onPressed:
+                        _isCleaning ? null : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: '关闭',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: _isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : _error != null
+                          ? Text(
+                              _error!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                height: 1.45,
+                              ),
+                            )
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _StorageMetricRow(
+                                  label: '本地媒体文件',
+                                  value: '${_report!.totalFileCount} 个',
+                                ),
+                                _StorageMetricRow(
+                                  label: '总占用',
+                                  value: _formatBytes(_report!.totalBytes),
+                                ),
+                                _StorageMetricRow(
+                                  label: '已被记录引用',
+                                  value:
+                                      '${_report!.referencedFileCount} 个 · ${_formatBytes(_report!.referencedBytes)}',
+                                ),
+                                _StorageMetricRow(
+                                  label: '可清理垃圾文件',
+                                  value:
+                                      '${_report!.orphanFileCount} 个 · ${_formatBytes(_report!.orphanBytes)}',
+                                  isWarning: _report!.orphanFileCount > 0,
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  '清理只会删除当前已经没有任何记录引用的本地媒体文件，不影响正常内容。',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    height: 1.45,
+                                    color: kLiquidGlassMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  OutlinedButton(
+                    onPressed: _isLoading || _isCleaning ? null : _load,
+                    child: const Text('刷新'),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: _isLoading ||
+                            _isCleaning ||
+                            (_report?.orphanFileCount ?? 0) == 0
+                        ? null
+                        : _cleanup,
+                    child: _isCleaning
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('清理垃圾文件'),
+                  ),
+                  TextButton(
+                    onPressed:
+                        _isCleaning ? null : () => Navigator.of(context).pop(),
+                    child: const Text('关闭'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isLoading || _isCleaning ? null : _load,
-          child: const Text('刷新'),
-        ),
-        TextButton(
-          onPressed:
-              _isLoading || _isCleaning || (_report?.orphanFileCount ?? 0) == 0
-                  ? null
-                  : _cleanup,
-          child: _isCleaning
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('清理垃圾文件'),
-        ),
-        TextButton(
-          onPressed: _isCleaning ? null : () => Navigator.of(context).pop(),
-          child: const Text('关闭'),
-        ),
-      ],
     );
   }
 

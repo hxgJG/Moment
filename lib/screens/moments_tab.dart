@@ -83,155 +83,148 @@ class _MomentsTabState extends State<MomentsTab> {
         .length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_filter == _MomentListFilter.conflict ? '冲突记录' : '拾光记'),
-            Text(
-              '把碎片折成一条会发光的时间流',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black.withOpacity(0.55),
-                fontWeight: FontWeight.w500,
+      body: SafeArea(
+        bottom: false,
+        child: () {
+          if (provider.isLoading) {
+            return const Center(
+              child: LiquidGlassCard(
+                child: CircularProgressIndicator(),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          if (provider.conflictCount > 0)
-            _ConflictQuickAction(
-              count: provider.conflictCount,
-              active: _filter == _MomentListFilter.conflict,
-              onPressed: () {
-                setState(() {
-                  _filter = _filter == _MomentListFilter.conflict
-                      ? _MomentListFilter.all
-                      : _MomentListFilter.conflict;
-                });
-              },
-            ),
-        ],
-      ),
-      body: () {
-        if (provider.isLoading) {
-          return const Center(
-            child: LiquidGlassCard(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
+            );
+          }
 
-        if (provider.error != null && provider.moments.isEmpty) {
-          return Center(
-            child: LiquidGlassCard(
-              tintColor: const Color(0xFFFFD7D7),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 52,
-                    color: Colors.red[300],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    provider.error!,
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => provider.fetchFromServer(),
-                    child: const Text('重新拉取'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (provider.moments.isEmpty) {
-          return const Center(
-            child: LiquidGlassCard(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.auto_awesome_outlined,
-                    size: 62,
-                    color: kLiquidGlassAccent,
-                  ),
-                  SizedBox(height: 14),
-                  Text(
-                    '还没有记录',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+          if (provider.error != null && provider.moments.isEmpty) {
+            return Center(
+              child: LiquidGlassCard(
+                tintColor: const Color(0xFFFFD7D7),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 52,
+                      color: Colors.red[300],
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    '点击底部中央按钮，把第一段回忆放进来。',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: kLiquidGlassMuted,
+                    const SizedBox(height: 14),
+                    Text(
+                      provider.error!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () => provider.fetchFromServer(),
-          child: ListView(
-            controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 150),
-            children: [
-              _MomentsHero(
-                totalCount: provider.moments.length,
-                conflictCount: provider.conflictCount,
-                pendingUploadCount: pendingUploadCount,
-              ),
-              const SizedBox(height: 16),
-              _FilterBar(
-                selected: _filter,
-                totalCount: provider.moments.length,
-                conflictCount: provider.conflictCount,
-                pendingUploadCount: pendingUploadCount,
-                localOnlyCount: localOnlyCount,
-                onChanged: (next) {
-                  setState(() {
-                    _filter = next;
-                    _visibleCount = MomentProvider.pageSize;
-                  });
-                },
-              ),
-              if (_filter != _MomentListFilter.all)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _FilterHint(
-                    filter: _filter,
-                    count: filteredMoments.length,
-                  ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () => provider.fetchFromServer(),
+                      child: const Text('重新拉取'),
+                    ),
+                  ],
                 ),
-              if (filteredMoments.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 60),
-                  child: _FilteredEmptyState(),
-                )
-              else ...[
-                ...visibleMoments.map((record) => _MomentCard(record: record)),
-                if (hasMoreVisible) _buildLoadMoreIndicator(),
+              ),
+            );
+          }
+
+          if (provider.moments.isEmpty) {
+            return const Center(
+              child: LiquidGlassCard(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 62,
+                      color: kLiquidGlassAccent,
+                    ),
+                    SizedBox(height: 14),
+                    Text(
+                      '还没有记录',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '点击底部中央按钮，把第一段回忆放进来。',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: kLiquidGlassMuted,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () => provider.fetchFromServer(),
+            child: ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 150),
+              children: [
+                if (provider.conflictCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _ConflictQuickAction(
+                        count: provider.conflictCount,
+                        active: _filter == _MomentListFilter.conflict,
+                        onPressed: () {
+                          setState(() {
+                            _filter = _filter == _MomentListFilter.conflict
+                                ? _MomentListFilter.all
+                                : _MomentListFilter.conflict;
+                            _visibleCount = MomentProvider.pageSize;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                _MomentsHero(
+                  totalCount: provider.moments.length,
+                  conflictCount: provider.conflictCount,
+                  pendingUploadCount: pendingUploadCount,
+                ),
+                const SizedBox(height: 16),
+                _FilterBar(
+                  selected: _filter,
+                  totalCount: provider.moments.length,
+                  conflictCount: provider.conflictCount,
+                  pendingUploadCount: pendingUploadCount,
+                  localOnlyCount: localOnlyCount,
+                  onChanged: (next) {
+                    setState(() {
+                      _filter = next;
+                      _visibleCount = MomentProvider.pageSize;
+                    });
+                  },
+                ),
+                if (_filter != _MomentListFilter.all)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _FilterHint(
+                      filter: _filter,
+                      count: filteredMoments.length,
+                    ),
+                  ),
+                if (filteredMoments.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 60),
+                    child: _FilteredEmptyState(),
+                  )
+                else ...[
+                  ...visibleMoments
+                      .map((record) => _MomentCard(record: record)),
+                  if (hasMoreVisible) _buildLoadMoreIndicator(),
+                ],
               ],
-            ],
-          ),
-        );
-      }(),
+            ),
+          );
+        }(),
+      ),
     );
   }
 
