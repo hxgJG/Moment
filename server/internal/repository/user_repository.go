@@ -127,12 +127,13 @@ func (r *UserRepository) GetUserRoles(userID uint64) ([]*model.Role, error) {
 func (r *UserRepository) GetUserPermissionCodes(userID uint64) ([]string, error) {
 	var codes []string
 	err := r.db.Model(&model.Permission{}).
-		Distinct("permissions.code").
+		Select("permissions.code").
 		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
 		Joins("JOIN user_roles ON user_roles.role_id = role_permissions.role_id").
 		Joins("JOIN roles ON roles.id = user_roles.role_id").
 		Where("user_roles.user_id = ?", userID).
 		Where("roles.status = 1 AND permissions.status = 1").
+		Group("permissions.id, permissions.code, permissions.sort").
 		Order("permissions.sort ASC, permissions.id ASC").
 		Pluck("permissions.code", &codes).Error
 	if err != nil {
