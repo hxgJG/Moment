@@ -304,6 +304,72 @@ void main() {
         DateTime.parse('2026-04-21T10:30:00'),
       );
     });
+
+    test('synced local records deleted remotely are removed locally', () async {
+      final db = _FakeMomentDatabase();
+      final api = _FakeMomentApiClient();
+      final provider = MomentProvider(
+        dbService: db,
+        api: api,
+        autoFetchOnBind: false,
+      );
+
+      final tempDir = await Directory.systemTemp.createTemp(
+        'moment-provider-remote-delete',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final localFile = File('${tempDir.path}/synced.jpg');
+      await localFile.writeAsString('synced-media');
+
+      await db.insertMoment(
+        MomentRecord(
+          id: 'local-synced-deleted',
+          serverId: '999',
+          content: 'to be removed',
+          createdAt: DateTime.parse('2026-04-20T08:00:00'),
+          updatedAt: DateTime.parse('2026-04-20T09:00:00'),
+          mediaType: MediaType.image,
+          mediaPaths: [localFile.path],
+          synced: true,
+          syncStatus: SyncStatus.synced,
+          lastSyncedAt: DateTime.parse('2026-04-20T09:00:00'),
+        ),
+        userId: 'user-a',
+      );
+
+      api.onGet = ({
+        required String path,
+        Map<String, dynamic>? queryParameters,
+      }) async {
+        expect(path, '/moments');
+        return const ApiCallResult(
+          statusCode: 200,
+          data: {
+            'code': 200,
+            'msg': 'ok',
+            'data': {
+              'list': <dynamic>[],
+              'total_pages': 1,
+            },
+          },
+        );
+      };
+
+      await provider.bindUser('user-a');
+      final result = await provider.fetchFromServer();
+
+      expect(result, isTrue);
+      expect(
+        await db.getMoment('local-synced-deleted', userId: 'user-a'),
+        isNull,
+      );
+      expect(await localFile.exists(), isFalse);
+    });
   });
 
   group('MomentProvider conflict resolution', () {

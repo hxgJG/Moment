@@ -16,55 +16,58 @@ class LiquidGlassBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFF6FAFF),
-            Color(0xFFE7EEFF),
-            Color(0xFFF7F1EA),
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFF6FAFF),
+              Color(0xFFE7EEFF),
+              Color(0xFFF7F1EA),
+            ],
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const Positioned(
+              top: -100,
+              left: -70,
+              child: _AmbientOrb(
+                size: 260,
+                colors: [
+                  Color(0x99A7C8FF),
+                  Color(0x44FFFFFF),
+                ],
+              ),
+            ),
+            const Positioned(
+              top: 120,
+              right: -90,
+              child: _AmbientOrb(
+                size: 280,
+                colors: [
+                  Color(0x88FFD7A8),
+                  Color(0x33FFFFFF),
+                ],
+              ),
+            ),
+            const Positioned(
+              bottom: -120,
+              left: 40,
+              child: _AmbientOrb(
+                size: 320,
+                colors: [
+                  Color(0x6666D0FF),
+                  Color(0x22FFFFFF),
+                ],
+              ),
+            ),
+            child,
           ],
         ),
-      ),
-      child: Stack(
-        children: [
-          const Positioned(
-            top: -100,
-            left: -70,
-            child: _AmbientOrb(
-              size: 260,
-              colors: [
-                Color(0x99A7C8FF),
-                Color(0x44FFFFFF),
-              ],
-            ),
-          ),
-          const Positioned(
-            top: 120,
-            right: -90,
-            child: _AmbientOrb(
-              size: 280,
-              colors: [
-                Color(0x88FFD7A8),
-                Color(0x33FFFFFF),
-              ],
-            ),
-          ),
-          const Positioned(
-            bottom: -120,
-            left: 40,
-            child: _AmbientOrb(
-              size: 320,
-              colors: [
-                Color(0x6666D0FF),
-                Color(0x22FFFFFF),
-              ],
-            ),
-          ),
-          child,
-        ],
       ),
     );
   }

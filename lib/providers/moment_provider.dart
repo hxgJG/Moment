@@ -885,6 +885,10 @@ class MomentProvider extends ChangeNotifier {
 
     final localMoments =
         await _dbService.getAllMoments(userId: _currentUserId!);
+    final remoteServerIds = {
+      for (final item in remoteMoments)
+        if (item.serverId != null && item.serverId!.isNotEmpty) item.serverId!,
+    };
     final localByServerId = {
       for (final m in localMoments)
         if (m.hasServerCopy) m.serverId!: m,
@@ -940,6 +944,18 @@ class MomentProvider extends ChangeNotifier {
         );
       }
     }
+
+    for (final local in localMoments) {
+      final serverId = local.serverId;
+      if (!local.synced || serverId == null || serverId.isEmpty) {
+        continue;
+      }
+      if (remoteServerIds.contains(serverId)) {
+        continue;
+      }
+      await _deleteLocalMediaFiles(local.mediaPaths);
+      await _dbService.deleteMoment(local.id, userId: _currentUserId!);
+    }
   }
 
   /// 获取未同步记录数
@@ -982,14 +998,8 @@ class MomentProvider extends ChangeNotifier {
 
   Future<void> _deleteLocalMediaFiles(List<String> paths) async {
     for (final path in paths) {
-      if (!isLocalMediaPath(path)) {
-        continue;
-      }
       try {
-        final file = File(path);
-        if (await file.exists()) {
-          await file.delete();
-        }
+        await deleteLocalMediaFileIfExists(path);
       } catch (e) {
         debugPrint('删除本地媒体文件失败: $e');
       }

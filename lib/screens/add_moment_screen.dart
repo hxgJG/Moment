@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:go_router/go_router.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
+import '../utils/media_source.dart';
 import '../widgets/liquid_glass.dart';
 
 /// 添加记录页面
@@ -29,9 +31,16 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
   bool _isRecording = false;
   String? _recordingPath;
   bool _isSaving = false;
+  final Set<String> _sessionMediaPaths = <String>{};
+  bool _didSave = false;
 
   @override
   void dispose() {
+    if (!_didSave) {
+      for (final path in _sessionMediaPaths) {
+        unawaited(deleteLocalMediaFileIfExists(path));
+      }
+    }
     _contentController.dispose();
     _audioRecorder.dispose();
     super.dispose();
@@ -46,6 +55,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
       );
       if (image != null) {
         final savedPath = await _saveMediaToAppDir(image.path);
+        _sessionMediaPaths.add(savedPath);
         setState(() {
           _mediaPaths.add(savedPath);
           _updateMediaType();
@@ -65,6 +75,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
       );
       if (video != null) {
         final savedPath = await _saveMediaToAppDir(video.path);
+        _sessionMediaPaths.add(savedPath);
         setState(() {
           _mediaPaths.add(savedPath);
           _updateMediaType();
@@ -93,31 +104,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
 
   /// 更新媒体类型
   void _updateMediaType() {
-    if (_mediaPaths.isEmpty) {
-      _mediaType = MediaType.text;
-    } else if (_mediaPaths.length == 1) {
-      final path = _mediaPaths.first;
-      if (path.endsWith('.jpg') ||
-          path.endsWith('.png') ||
-          path.endsWith('.jpeg') ||
-          path.endsWith('.gif')) {
-        _mediaType = MediaType.image;
-      } else if (path.endsWith('.mp4') ||
-          path.endsWith('.mov') ||
-          path.endsWith('.avi') ||
-          path.endsWith('.webm')) {
-        _mediaType = MediaType.video;
-      } else if (path.endsWith('.mp3') ||
-          path.endsWith('.m4a') ||
-          path.endsWith('.aac') ||
-          path.endsWith('.wav')) {
-        _mediaType = MediaType.audio;
-      } else {
-        _mediaType = MediaType.mixed;
-      }
-    } else {
-      _mediaType = MediaType.mixed;
-    }
+    _mediaType = inferMediaTypeFromPaths(_mediaPaths);
   }
 
   /// 开始录音
@@ -159,6 +146,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
       });
 
       if (path != null && _recordingPath != null) {
+        _sessionMediaPaths.add(_recordingPath!);
         setState(() {
           _mediaPaths.add(_recordingPath!);
           _updateMediaType();
@@ -171,6 +159,9 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
 
   /// 删除媒体
   void _removeMedia(int index) {
+    final path = _mediaPaths[index];
+    _sessionMediaPaths.remove(path);
+    unawaited(deleteLocalMediaFileIfExists(path));
     setState(() {
       _mediaPaths.removeAt(index);
       _updateMediaType();
@@ -195,6 +186,7 @@ class _AddMomentScreenState extends State<AddMomentScreen> {
       );
 
       if (success && mounted) {
+        _didSave = true;
         context.pop();
       } else if (mounted) {
         _showError(provider.error ?? '保存失败');

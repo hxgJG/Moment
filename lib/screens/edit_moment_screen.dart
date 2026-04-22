@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -33,6 +34,9 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
   String? _recordingPath;
   bool _isSaving = false;
   MomentRecord? _originalRecord;
+  final Set<String> _sessionMediaPaths = <String>{};
+  final Set<String> _removedLocalMediaPaths = <String>{};
+  bool _didSave = false;
 
   @override
   void initState() {
@@ -54,6 +58,11 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
 
   @override
   void dispose() {
+    if (!_didSave) {
+      for (final path in _sessionMediaPaths) {
+        unawaited(deleteLocalMediaFileIfExists(path));
+      }
+    }
     _contentController.dispose();
     _audioRecorder.dispose();
     super.dispose();
@@ -68,6 +77,7 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       );
       if (image != null) {
         final savedPath = await _saveMediaToAppDir(image.path);
+        _sessionMediaPaths.add(savedPath);
         setState(() {
           _mediaPaths.add(savedPath);
           _updateMediaType();
@@ -87,6 +97,7 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       );
       if (video != null) {
         final savedPath = await _saveMediaToAppDir(video.path);
+        _sessionMediaPaths.add(savedPath);
         setState(() {
           _mediaPaths.add(savedPath);
           _updateMediaType();
@@ -115,31 +126,7 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
 
   /// 更新媒体类型
   void _updateMediaType() {
-    if (_mediaPaths.isEmpty) {
-      _mediaType = MediaType.text;
-    } else if (_mediaPaths.length == 1) {
-      final path = _mediaPaths.first;
-      if (path.endsWith('.jpg') ||
-          path.endsWith('.png') ||
-          path.endsWith('.jpeg') ||
-          path.endsWith('.gif')) {
-        _mediaType = MediaType.image;
-      } else if (path.endsWith('.mp4') ||
-          path.endsWith('.mov') ||
-          path.endsWith('.avi') ||
-          path.endsWith('.webm')) {
-        _mediaType = MediaType.video;
-      } else if (path.endsWith('.mp3') ||
-          path.endsWith('.m4a') ||
-          path.endsWith('.aac') ||
-          path.endsWith('.wav')) {
-        _mediaType = MediaType.audio;
-      } else {
-        _mediaType = MediaType.mixed;
-      }
-    } else {
-      _mediaType = MediaType.mixed;
-    }
+    _mediaType = inferMediaTypeFromPaths(_mediaPaths);
   }
 
   /// 开始录音
@@ -180,6 +167,7 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       });
 
       if (path != null && _recordingPath != null) {
+        _sessionMediaPaths.add(_recordingPath!);
         setState(() {
           _mediaPaths.add(_recordingPath!);
           _updateMediaType();
@@ -192,6 +180,12 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
 
   /// 删除媒体
   void _removeMedia(int index) {
+    final path = _mediaPaths[index];
+    if (_sessionMediaPaths.remove(path)) {
+      unawaited(deleteLocalMediaFileIfExists(path));
+    } else if (isLocalMediaPath(path)) {
+      _removedLocalMediaPaths.add(path);
+    }
     setState(() {
       _mediaPaths.removeAt(index);
       _updateMediaType();
@@ -200,6 +194,10 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
 
   /// 保存修改
   Future<void> _saveMoment() async {
+    if (_originalRecord == null) {
+      _showError('原始记录不存在，无法保存');
+      return;
+    }
     if (_contentController.text.isEmpty && _mediaPaths.isEmpty) {
       _showError('请输入内容或添加媒体');
       return;
@@ -222,6 +220,10 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       final success = await provider.updateMoment(updatedRecord);
 
       if (success && mounted) {
+        _didSave = true;
+        for (final path in _removedLocalMediaPaths) {
+          unawaited(deleteLocalMediaFileIfExists(path));
+        }
         context.pop();
       } else if (mounted) {
         _showError(provider.error ?? '保存失败');

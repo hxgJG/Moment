@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/moment_record.dart';
 import 'storage_service.dart';
+import '../utils/media_source.dart';
 
 /// 数据库服务 - 管理本地SQLite数据库
 class DatabaseService {
@@ -389,6 +390,28 @@ class DatabaseService {
       where: 'id = ? AND user_id = ?',
       whereArgs: [localId, userId],
     );
+  }
+
+  Future<List<String>> getAllLocalMediaPaths() async {
+    final db = await database;
+    final rows = await db.query(
+      'moments',
+      columns: ['media_paths'],
+    );
+
+    final result = <String>[];
+    for (final row in rows) {
+      final raw = row['media_paths']?.toString() ?? '';
+      if (raw.isEmpty) {
+        continue;
+      }
+      for (final path in raw.split(',')) {
+        if (path.isNotEmpty && isLocalMediaPath(path)) {
+          result.add(path);
+        }
+      }
+    }
+    return result;
   }
 
   /// 关闭数据库

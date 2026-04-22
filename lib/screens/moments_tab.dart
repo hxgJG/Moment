@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +23,8 @@ class _MomentsTabState extends State<MomentsTab> {
   final ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   _MomentListFilter _filter = _MomentListFilter.all;
+  int _visibleCount = MomentProvider.pageSize;
+  int _currentFilteredCount = 0;
 
   @override
   void initState() {
@@ -45,18 +48,20 @@ class _MomentsTabState extends State<MomentsTab> {
 
   Future<void> _loadMore() async {
     if (_isLoadingMore) return;
-
-    final provider = context.read<MomentProvider>();
-    if (!provider.hasMore) return;
+    if (_visibleCount >= _currentFilteredCount) return;
 
     setState(() {
       _isLoadingMore = true;
     });
 
-    await provider.loadMore();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
 
     if (mounted) {
       setState(() {
+        _visibleCount = math.min(
+          _visibleCount + MomentProvider.pageSize,
+          _currentFilteredCount,
+        );
         _isLoadingMore = false;
       });
     }
@@ -66,6 +71,10 @@ class _MomentsTabState extends State<MomentsTab> {
   Widget build(BuildContext context) {
     final provider = context.watch<MomentProvider>();
     final filteredMoments = _applyFilter(provider.moments);
+    _currentFilteredCount = filteredMoments.length;
+    final visibleCount = math.min(_visibleCount, filteredMoments.length);
+    final visibleMoments = filteredMoments.take(visibleCount).toList();
+    final hasMoreVisible = visibleCount < filteredMoments.length;
     final pendingUploadCount = provider.moments
         .where((m) => m.syncStatus == SyncStatus.pendingUpload)
         .length;
@@ -198,6 +207,7 @@ class _MomentsTabState extends State<MomentsTab> {
                 onChanged: (next) {
                   setState(() {
                     _filter = next;
+                    _visibleCount = MomentProvider.pageSize;
                   });
                 },
               ),
@@ -215,9 +225,8 @@ class _MomentsTabState extends State<MomentsTab> {
                   child: _FilteredEmptyState(),
                 )
               else ...[
-                ...filteredMoments.map((record) => _MomentCard(record: record)),
-                if (_filter == _MomentListFilter.all && provider.hasMore)
-                  _buildLoadMoreIndicator(),
+                ...visibleMoments.map((record) => _MomentCard(record: record)),
+                if (hasMoreVisible) _buildLoadMoreIndicator(),
               ],
             ],
           ),
@@ -234,7 +243,7 @@ class _MomentsTabState extends State<MomentsTab> {
             ? const CircularProgressIndicator()
             : TextButton(
                 onPressed: _loadMore,
-                child: const Text('加载更多'),
+                child: Text('继续展开 (${_currentFilteredCount - _visibleCount})'),
               ),
       ),
     );

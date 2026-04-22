@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import '../config/env.dart';
+import '../models/moment_record.dart';
 
 bool isAbsoluteMediaUrl(String path) {
   final uri = Uri.tryParse(path);
@@ -56,4 +59,33 @@ bool isAudioMediaPath(String path) {
       normalized.endsWith('.m4a') ||
       normalized.endsWith('.aac') ||
       normalized.endsWith('.wav');
+}
+
+MediaType inferMediaTypeFromPaths(List<String> paths) {
+  if (paths.isEmpty) {
+    return MediaType.text;
+  }
+  if (paths.length == 1) {
+    final path = paths.first;
+    if (isImageMediaPath(path)) {
+      return MediaType.image;
+    }
+    if (isVideoMediaPath(path)) {
+      return MediaType.video;
+    }
+    if (isAudioMediaPath(path)) {
+      return MediaType.audio;
+    }
+  }
+  return MediaType.mixed;
+}
+
+Future<void> deleteLocalMediaFileIfExists(String path) async {
+  if (!isLocalMediaPath(path)) {
+    return;
+  }
+  final file = File(path);
+  if (await file.exists()) {
+    await file.delete();
+  }
 }

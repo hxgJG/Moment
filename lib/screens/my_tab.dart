@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/moment_provider.dart';
+import '../services/media_storage_service.dart';
 import '../widgets/liquid_glass.dart';
 
 /// 我的Tab - 统计和设置
@@ -38,7 +39,12 @@ class MyTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _UserCard(user: authProvider.user),
+                _UserCard(
+                  user: authProvider.user,
+                  onLogin: authProvider.isLoggedIn
+                      ? null
+                      : () => context.go('/login'),
+                ),
                 const SizedBox(height: 16),
                 _StatisticsCard(stats: momentProvider.statistics),
                 const SizedBox(height: 16),
@@ -49,6 +55,8 @@ class MyTab extends StatelessWidget {
                   const SizedBox(height: 16),
                 ],
                 _SettingsSection(
+                  isLoggedIn: authProvider.isLoggedIn,
+                  onLogin: () => context.go('/login'),
                   onLogout: () => _handleLogout(context, authProvider),
                 ),
               ],
@@ -93,14 +101,69 @@ class MyTab extends StatelessWidget {
 
 class _UserCard extends StatelessWidget {
   final User? user;
+  final VoidCallback? onLogin;
 
-  const _UserCard({required this.user});
+  const _UserCard({
+    required this.user,
+    this.onLogin,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (user == null) {
-      return const LiquidGlassCard(
-        child: Text('未登录'),
+      return LiquidGlassCard(
+        tintColor: const Color(0xFFC8DAFF),
+        onTap: onLogin,
+        child: Row(
+          children: [
+            LiquidGlassCard(
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(30),
+              tintColor: const Color(0xFFDDE8FF),
+              child: const SizedBox(
+                width: 68,
+                height: 68,
+                child: Center(
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    size: 28,
+                    color: kLiquidGlassAccent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '未登录',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    '登录后可同步云端时光并恢复你的记录',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: kLiquidGlassMuted,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: onLogin,
+              child: const Text('立即登录'),
+            ),
+          ],
+        ),
       );
     }
 
@@ -643,9 +706,15 @@ class _StatItem extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
+  final bool isLoggedIn;
+  final VoidCallback onLogin;
   final VoidCallback onLogout;
 
-  const _SettingsSection({required this.onLogout});
+  const _SettingsSection({
+    required this.isLoggedIn,
+    required this.onLogin,
+    required this.onLogout,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -654,10 +723,10 @@ class _SettingsSection extends StatelessWidget {
       child: Column(
         children: [
           _SettingsItem(
-            icon: Icons.logout,
-            title: '退出登录',
-            onTap: onLogout,
-            isDestructive: true,
+            icon: isLoggedIn ? Icons.logout : Icons.login_rounded,
+            title: isLoggedIn ? '退出登录' : '立即登录',
+            onTap: isLoggedIn ? onLogout : onLogin,
+            isDestructive: isLoggedIn,
           ),
           Divider(height: 1, color: Colors.white.withOpacity(0.35)),
           _SettingsItem(
@@ -669,11 +738,7 @@ class _SettingsSection extends StatelessWidget {
           _SettingsItem(
             icon: Icons.storage,
             title: '存储管理',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('存储管理功能开发中')),
-              );
-            },
+            onTap: () => _showStorageDialog(context),
           ),
         ],
       ),
@@ -712,6 +777,17 @@ class _SettingsSection extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _showStorageDialog(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return _StorageManagementDialog(
+          mediaStorageService: MediaStorageService(),
+        );
+      },
+    );
+  }
 }
 
 class _SettingsItem extends StatelessWidget {
@@ -745,6 +821,217 @@ class _SettingsItem extends StatelessWidget {
           ? null
           : const Icon(Icons.chevron_right_rounded, color: kLiquidGlassMuted),
       onTap: onTap,
+    );
+  }
+}
+
+class _StorageManagementDialog extends StatefulWidget {
+  final MediaStorageService mediaStorageService;
+
+  const _StorageManagementDialog({
+    required this.mediaStorageService,
+  });
+
+  @override
+  State<_StorageManagementDialog> createState() =>
+      _StorageManagementDialogState();
+}
+
+class _StorageManagementDialogState extends State<_StorageManagementDialog> {
+  MediaStorageReport? _report;
+  bool _isLoading = true;
+  bool _isCleaning = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final report = await widget.mediaStorageService.inspectStorage();
+      if (!mounted) return;
+      setState(() {
+        _report = report;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '读取存储信息失败: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _cleanup() async {
+    setState(() {
+      _isCleaning = true;
+    });
+
+    try {
+      final result = await widget.mediaStorageService.deleteOrphanedFiles();
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.deletedFileCount == 0
+                ? '没有可清理的无引用文件'
+                : '已清理 ${result.deletedFileCount} 个文件，释放 ${_formatBytes(result.freedBytes)}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('清理失败: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCleaning = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('存储管理'),
+      content: SizedBox(
+        width: 360,
+        child: _isLoading
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : _error != null
+                ? Text(_error!)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _StorageMetricRow(
+                        label: '本地媒体文件',
+                        value: '${_report!.totalFileCount} 个',
+                      ),
+                      _StorageMetricRow(
+                        label: '总占用',
+                        value: _formatBytes(_report!.totalBytes),
+                      ),
+                      _StorageMetricRow(
+                        label: '已被记录引用',
+                        value:
+                            '${_report!.referencedFileCount} 个 · ${_formatBytes(_report!.referencedBytes)}',
+                      ),
+                      _StorageMetricRow(
+                        label: '可清理垃圾文件',
+                        value:
+                            '${_report!.orphanFileCount} 个 · ${_formatBytes(_report!.orphanBytes)}',
+                        isWarning: _report!.orphanFileCount > 0,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '清理只会删除当前已经没有任何记录引用的本地媒体文件，不影响正常内容。',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          color: kLiquidGlassMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading || _isCleaning ? null : _load,
+          child: const Text('刷新'),
+        ),
+        TextButton(
+          onPressed:
+              _isLoading || _isCleaning || (_report?.orphanFileCount ?? 0) == 0
+                  ? null
+                  : _cleanup,
+          child: _isCleaning
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('清理垃圾文件'),
+        ),
+        TextButton(
+          onPressed: _isCleaning ? null : () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    return '${value.toStringAsFixed(value >= 10 || unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
+  }
+}
+
+class _StorageMetricRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isWarning;
+
+  const _StorageMetricRow({
+    required this.label,
+    required this.value,
+    this.isWarning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isWarning ? Colors.orange[800] : kLiquidGlassInk;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: kLiquidGlassMuted,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
