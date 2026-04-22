@@ -14,29 +14,13 @@
         text-color="#bfcbd9"
         active-text-color="#409EFF"
       >
-        <el-menu-item index="/users">
-          <el-icon><User /></el-icon>
-          <span>用户管理</span>
-        </el-menu-item>
-
-        <el-menu-item index="/moments">
-          <el-icon><Clock /></el-icon>
-          <span>时光管理</span>
-        </el-menu-item>
-
-        <el-menu-item index="/roles">
-          <el-icon><Key /></el-icon>
-          <span>角色管理</span>
-        </el-menu-item>
-
-        <el-menu-item index="/permissions">
-          <el-icon><Grid /></el-icon>
-          <span>权限管理</span>
-        </el-menu-item>
-
-        <el-menu-item index="/logs">
-          <el-icon><Document /></el-icon>
-          <span>日志管理</span>
+        <el-menu-item
+          v-for="item in visibleMenuItems"
+          :key="item.path"
+          :index="item.path"
+        >
+          <el-icon><component :is="iconMap[item.path]" /></el-icon>
+          <span>{{ item.title }}</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -74,27 +58,64 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAdminStore } from '../stores/admin'
+import { getAdminInfo } from '../api/login'
+import {
+  adminMenuItems,
+  firstAccessibleAdminPath,
+  titleForAdminPath
+} from '../constants/admin-menu'
 
 const route = useRoute()
 const router = useRouter()
 const adminStore = useAdminStore()
 
 const activeMenu = computed(() => route.path)
+const visibleMenuItems = computed(() =>
+  adminMenuItems.filter((item) => adminStore.hasPermission(item.permission))
+)
+const iconMap = {
+  '/users': 'User',
+  '/moments': 'Clock',
+  '/roles': 'Key',
+  '/permissions': 'Grid',
+  '/logs': 'Document'
+}
 
-const currentTitle = computed(() => {
-  const menuMap = {
-    '/users': '用户管理',
-    '/moments': '时光管理',
-    '/roles': '角色管理',
-    '/permissions': '权限管理',
-    '/logs': '日志管理'
+const currentTitle = computed(() => titleForAdminPath(route.path))
+
+function ensureRouteAccess() {
+  const currentItem = adminMenuItems.find((item) => item.path === route.path)
+  if (!currentItem || adminStore.hasPermission(currentItem.permission)) {
+    return
   }
-  return menuMap[route.path] || '管理后台'
-})
+  const fallback = firstAccessibleAdminPath((permission) =>
+    adminStore.hasPermission(permission)
+  )
+  if (!fallback) {
+    ElMessage.warning('当前账号没有可访问的管理菜单')
+    return
+  }
+  if (fallback !== route.path) {
+    router.replace(fallback)
+  }
+}
+
+async function hydrateAdminProfile() {
+  if (!adminStore.token || adminStore.hasPermissionData) {
+    return
+  }
+  try {
+    const res = await getAdminInfo()
+    adminStore.setUser(res.data)
+    ensureRouteAccess()
+  } catch (error) {
+    console.error('加载管理员信息失败:', error)
+  }
+}
 
 function handleCommand(command) {
   if (command === 'logout') {
@@ -106,6 +127,18 @@ function handleCommand(command) {
     }).catch(() => {})
   }
 }
+
+onMounted(() => {
+  hydrateAdminProfile()
+  ensureRouteAccess()
+})
+
+watch(
+  () => route.path,
+  () => {
+    ensureRouteAccess()
+  }
+)
 </script>
 
 <style scoped>

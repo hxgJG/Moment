@@ -9,6 +9,8 @@ import 'package:path/path.dart' as p;
 import 'package:go_router/go_router.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
+import '../utils/media_source.dart';
+import '../widgets/liquid_glass.dart';
 
 /// 编辑记录页面
 class EditMomentScreen extends StatefulWidget {
@@ -103,7 +105,8 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       await mediaDir.create(recursive: true);
     }
 
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}${p.extension(sourcePath)}';
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}${p.extension(sourcePath)}';
     final destPath = '${mediaDir.path}/$fileName';
 
     await File(sourcePath).copy(destPath);
@@ -116,14 +119,20 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       _mediaType = MediaType.text;
     } else if (_mediaPaths.length == 1) {
       final path = _mediaPaths.first;
-      if (path.endsWith('.jpg') || path.endsWith('.png') ||
-          path.endsWith('.jpeg') || path.endsWith('.gif')) {
+      if (path.endsWith('.jpg') ||
+          path.endsWith('.png') ||
+          path.endsWith('.jpeg') ||
+          path.endsWith('.gif')) {
         _mediaType = MediaType.image;
-      } else if (path.endsWith('.mp4') || path.endsWith('.mov') ||
-          path.endsWith('.avi') || path.endsWith('.webm')) {
+      } else if (path.endsWith('.mp4') ||
+          path.endsWith('.mov') ||
+          path.endsWith('.avi') ||
+          path.endsWith('.webm')) {
         _mediaType = MediaType.video;
-      } else if (path.endsWith('.mp3') || path.endsWith('.m4a') ||
-          path.endsWith('.aac') || path.endsWith('.wav')) {
+      } else if (path.endsWith('.mp3') ||
+          path.endsWith('.m4a') ||
+          path.endsWith('.aac') ||
+          path.endsWith('.wav')) {
         _mediaType = MediaType.audio;
       } else {
         _mediaType = MediaType.mixed;
@@ -148,7 +157,8 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
         await audioDir.create(recursive: true);
       }
 
-      _recordingPath = '${audioDir.path}/${DateTime.now().millisecondsSinceEpoch}.m4a';
+      _recordingPath =
+          '${audioDir.path}/${DateTime.now().millisecondsSinceEpoch}.m4a';
 
       await _audioRecorder.start(
         const RecordConfig(encoder: AudioEncoder.aacLc),
@@ -201,13 +211,12 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
       final provider = context.read<MomentProvider>();
 
       // 更新记录
-      final updatedRecord = MomentRecord(
-        id: _originalRecord!.id,
+      final updatedRecord = _originalRecord!.copyWith(
         content: _contentController.text,
-        createdAt: _originalRecord!.createdAt,
         updatedAt: DateTime.now(),
         mediaType: _mediaType,
         mediaPaths: _mediaPaths,
+        synced: false,
       );
 
       final success = await provider.updateMoment(updatedRecord);
@@ -234,9 +243,24 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final conflictRemoteUpdatedAt = _originalRecord?.conflictRemoteUpdatedAt;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('编辑记录'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('编辑记录'),
+            Text(
+              '继续雕琢这块回忆玻璃',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.55),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _saveMoment,
@@ -250,54 +274,87 @@ class _EditMomentScreenState extends State<EditMomentScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 文字输入
-            TextField(
-              controller: _contentController,
-              maxLines: 6,
-              decoration: InputDecoration(
-                hintText: '记录今天的点滴...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+      body: LiquidGlassBackground(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_originalRecord?.syncStatus == SyncStatus.conflict) ...[
+                LiquidGlassCard(
+                  tintColor: const Color(0xFFFFE0B2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.sync_problem_outlined,
+                        color: Colors.orange[800],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          conflictRemoteUpdatedAt != null
+                              ? '这条记录当前处于同步冲突状态。系统检测到云端版本在 ${conflictRemoteUpdatedAt.toLocal()} 后发生了更新；继续编辑会保留本地版本，并在你确认后用于覆盖云端。'
+                              : '这条记录当前处于同步冲突状态。继续编辑会保留本地版本，并在你确认后用于覆盖云端。',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.5,
+                            color: Colors.orange[800],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                filled: true,
-                fillColor: Colors.grey[50],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 媒体预览
-            if (_mediaPaths.isNotEmpty) ...[
-              _MediaPreviewGrid(
-                mediaPaths: _mediaPaths,
-                onRemove: _removeMedia,
+                const SizedBox(height: 16),
+              ],
+              LiquidGlassCard(
+                child: TextField(
+                  controller: _contentController,
+                  maxLines: 7,
+                  decoration: const InputDecoration(
+                    hintText: '记录今天的点滴...',
+                    border: InputBorder.none,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-            ],
-
-            // 添加媒体按钮
-            const Text(
-              '添加媒体',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+              if (_mediaPaths.isNotEmpty) ...[
+                LiquidGlassCard(
+                  child: _MediaPreviewGrid(
+                    mediaPaths: _mediaPaths,
+                    onRemove: _removeMedia,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              LiquidGlassCard(
+                tintColor: const Color(0xFFFFE6C7),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '添加媒体',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _MediaButtons(
+                      isRecording: _isRecording,
+                      onPickImage: () => _pickImage(ImageSource.gallery),
+                      onPickCameraImage: () => _pickImage(ImageSource.camera),
+                      onPickVideo: () => _pickVideo(ImageSource.gallery),
+                      onPickCameraVideo: () => _pickVideo(ImageSource.camera),
+                      onStartRecording: _startRecording,
+                      onStopRecording: _stopRecording,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            _MediaButtons(
-              isRecording: _isRecording,
-              onPickImage: () => _pickImage(ImageSource.gallery),
-              onPickCameraImage: () => _pickImage(ImageSource.camera),
-              onPickVideo: () => _pickVideo(ImageSource.gallery),
-              onPickCameraVideo: () => _pickVideo(ImageSource.camera),
-              onStartRecording: _startRecording,
-              onStopRecording: _stopRecording,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -337,35 +394,41 @@ class _MediaThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isImage = path.endsWith('.jpg') || path.endsWith('.png') ||
-        path.endsWith('.jpeg') || path.endsWith('.gif');
-    final isVideo = path.endsWith('.mp4') || path.endsWith('.mov') ||
-        path.endsWith('.avi') || path.endsWith('.webm');
-    final isAudio = path.endsWith('.mp3') || path.endsWith('.m4a') ||
-        path.endsWith('.aac') || path.endsWith('.wav');
+    final isImage = isImageMediaPath(path);
+    final isVideo = isVideoMediaPath(path);
+    final isAudio = isAudioMediaPath(path);
 
     return Stack(
       children: [
-        Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.grey[200],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: isImage
-                ? Image.file(
-                    File(path),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
-                  )
-                : isVideo
-                    ? const Center(child: Icon(Icons.videocam, size: 32))
-                    : isAudio
-                        ? const Center(child: Icon(Icons.audiotrack, size: 32))
-                        : const Icon(Icons.insert_drive_file),
+        LiquidGlassCard(
+          padding: EdgeInsets.zero,
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: 100,
+            height: 100,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: isImage
+                  ? (isLocalMediaPath(path)
+                      ? Image.file(
+                          File(path),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.broken_image),
+                        )
+                      : Image.network(
+                          resolveMediaUrl(path),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.broken_image),
+                        ))
+                  : isVideo
+                      ? const Center(child: Icon(Icons.videocam, size: 32))
+                      : isAudio
+                          ? const Center(
+                              child: Icon(Icons.audiotrack, size: 32))
+                          : const Icon(Icons.insert_drive_file),
+            ),
           ),
         ),
         Positioned(
@@ -472,33 +535,24 @@ class _MediaButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return LiquidGlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      borderRadius: BorderRadius.circular(18),
+      tintColor: isActive ? color.withOpacity(0.18) : Colors.white,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive ? color.withOpacity(0.2) : color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive ? color : color.withOpacity(0.3),
-            width: isActive ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

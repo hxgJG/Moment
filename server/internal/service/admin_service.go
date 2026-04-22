@@ -14,13 +14,13 @@ import (
 
 // 错误定义（从 auth_service.go 引用）
 var (
-	ErrUserExists         = errors.New("user already exists")
-	ErrUserDisabled       = errors.New("user is disabled")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrRoleNotFound      = errors.New("role not found")
-	ErrRoleExists        = errors.New("role already exists")
-	ErrRoleHasUsers           = errors.New("role has assigned users")
-	ErrInvalidAdminRefresh    = errors.New("invalid admin refresh token")
+	ErrUserExists          = errors.New("user already exists")
+	ErrUserDisabled        = errors.New("user is disabled")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrRoleNotFound        = errors.New("role not found")
+	ErrRoleExists          = errors.New("role already exists")
+	ErrRoleHasUsers        = errors.New("role has assigned users")
+	ErrInvalidAdminRefresh = errors.New("invalid admin refresh token")
 )
 
 // ==================== 用户管理 ====================
@@ -47,9 +47,9 @@ type AdminRefreshRequest struct {
 
 // UserListResponse 用户列表响应
 type UserListResponse struct {
-	Total    int64          `json:"total"`
-	Page     int            `json:"page"`
-	PageSize int            `json:"page_size"`
+	Total    int64           `json:"total"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"page_size"`
 	Users    []*UserResponse `json:"users"`
 }
 
@@ -111,11 +111,15 @@ func (s *UserService) AdminLogin(req *AdminLoginRequest) (*AdminLoginResponse, e
 
 	ttl := jm.AccessTokenExpireSeconds()
 	expiresAt := time.Now().Add(time.Duration(ttl) * time.Second).Unix()
+	profile, err := s.GetAdminProfile(user.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	return &AdminLoginResponse{
 		Token:        access,
 		RefreshToken: refresh,
-		User:         toUserResponse(user),
+		User:         profile,
 		ExpiresAt:    expiresAt,
 		ExpiresIn:    ttl,
 	}, nil
@@ -152,11 +156,15 @@ func (s *UserService) AdminRefreshToken(req *AdminRefreshRequest) (*AdminLoginRe
 
 	ttl := jm.AccessTokenExpireSeconds()
 	expiresAt := time.Now().Add(time.Duration(ttl) * time.Second).Unix()
+	profile, err := s.GetAdminProfile(user.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	return &AdminLoginResponse{
 		Token:        access,
 		RefreshToken: refresh,
-		User:         toUserResponse(user),
+		User:         profile,
 		ExpiresAt:    expiresAt,
 		ExpiresIn:    ttl,
 	}, nil
@@ -358,18 +366,18 @@ type RoleListResponse struct {
 
 // CreateRoleRequest 创建角色请求
 type CreateRoleRequest struct {
-	Name         string   `json:"name" binding:"required,max=50"`
-	Code         string   `json:"code" binding:"required,max=50"`
-	Description  string   `json:"description" binding:"max=200"`
+	Name          string   `json:"name" binding:"required,max=50"`
+	Code          string   `json:"code" binding:"required,max=50"`
+	Description   string   `json:"description" binding:"max=200"`
 	PermissionIDs []uint64 `json:"permission_ids"`
 }
 
 // UpdateRoleRequest 更新角色请求
 type UpdateRoleRequest struct {
-	Name         string   `json:"name" binding:"max=50"`
-	Code         string   `json:"code" binding:"max=50"`
-	Description  string   `json:"description" binding:"max=200"`
-	Status       *int8    `json:"status"`
+	Name          string   `json:"name" binding:"max=50"`
+	Code          string   `json:"code" binding:"max=50"`
+	Description   string   `json:"description" binding:"max=200"`
+	Status        *int8    `json:"status"`
 	PermissionIDs []uint64 `json:"permission_ids"`
 }
 
@@ -646,9 +654,9 @@ type OperationLogResponse struct {
 
 // LogListResponse 日志列表响应
 type LogListResponse struct {
-	Total    int64                    `json:"total"`
-	Page     int                      `json:"page"`
-	PageSize int                      `json:"page_size"`
+	Total    int64                   `json:"total"`
+	Page     int                     `json:"page"`
+	PageSize int                     `json:"page_size"`
 	Logs     []*OperationLogResponse `json:"logs"`
 }
 

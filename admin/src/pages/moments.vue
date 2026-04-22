@@ -40,6 +40,7 @@
             <el-option label="图片" value="image" />
             <el-option label="音频" value="audio" />
             <el-option label="视频" value="video" />
+            <el-option label="混合" value="mixed" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -153,7 +154,14 @@
               </el-table-column>
               <el-table-column label="操作" width="100" fixed="right">
                 <template #default="{ row }">
-                  <el-button type="primary" link @click.stop="openDetail(row)">详情</el-button>
+                  <el-button
+                    v-if="canViewMoments"
+                    type="primary"
+                    link
+                    @click.stop="openDetail(row)"
+                  >
+                    详情
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -184,8 +192,18 @@
         <el-divider v-if="detailRow.media_paths?.length" content-position="left">媒体</el-divider>
         <ul v-if="detailRow.media_paths?.length" class="media-list">
           <li v-for="(p, i) in detailRow.media_paths" :key="i">
-            <a v-if="isAbsoluteUrl(p)" :href="p" target="_blank" rel="noopener">{{ p }}</a>
-            <span v-else>{{ p }}</span>
+            <template v-if="mediaKind(p) === 'image'">
+              <a :href="mediaHref(p)" target="_blank" rel="noopener">
+                <img :src="mediaHref(p)" class="media-preview-image" />
+              </a>
+            </template>
+            <template v-else-if="mediaKind(p) === 'audio'">
+              <audio :src="mediaHref(p)" controls preload="metadata" class="media-preview-audio" />
+            </template>
+            <template v-else-if="mediaKind(p) === 'video'">
+              <video :src="mediaHref(p)" controls preload="metadata" class="media-preview-video" />
+            </template>
+            <a :href="mediaHref(p)" target="_blank" rel="noopener">{{ mediaHref(p) }}</a>
           </li>
         </ul>
       </template>
@@ -194,14 +212,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { getUserMoments } from '../api/moment'
+import { useAdminStore } from '../stores/admin'
 
 const route = useRoute()
 const router = useRouter()
+const adminStore = useAdminStore()
 
 const userIdInput = ref('')
 const currentUser = ref(null)
@@ -225,12 +245,14 @@ const pagination = reactive({
   pageSize: 10,
   total: 0
 })
+const canViewMoments = computed(() => adminStore.hasPermission('moment:list'))
 
 const mediaMap = {
   text: '文字',
   image: '图片',
   audio: '音频',
-  video: '视频'
+  video: '视频',
+  mixed: '混合'
 }
 
 function mediaTypeLabel(t) {
@@ -244,6 +266,21 @@ function contentPreview(s) {
 
 function isAbsoluteUrl(s) {
   return /^https?:\/\//i.test(s)
+}
+
+function mediaHref(s) {
+  if (!s) return ''
+  if (isAbsoluteUrl(s)) return s
+  if (s.startsWith('/')) return `${window.location.origin}${s}`
+  return s
+}
+
+function mediaKind(s) {
+  const path = (isAbsoluteUrl(s) ? new URL(s).pathname : s).toLowerCase()
+  if (/\.(jpg|jpeg|png|gif|webp|bmp)$/.test(path)) return 'image'
+  if (/\.(mp3|m4a|aac|wav)$/.test(path)) return 'audio'
+  if (/\.(mp4|mov|avi|mkv|webm)$/.test(path)) return 'video'
+  return 'file'
 }
 
 function goUsers() {
@@ -431,5 +468,25 @@ watch(
   margin: 0;
   padding-left: 1.2em;
   word-break: break-all;
+}
+
+.media-list li {
+  margin-bottom: 12px;
+}
+
+.media-preview-image,
+.media-preview-video {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  border-radius: 8px;
+  background: #f5f7fa;
+}
+
+.media-preview-audio {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin-bottom: 8px;
 }
 </style>

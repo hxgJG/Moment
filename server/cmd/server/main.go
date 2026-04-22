@@ -64,6 +64,7 @@ func main() {
 
 	// 注册路由
 	registerRoutes(router)
+	router.Static("/uploads", config.Get().Upload.LocalPath)
 
 	// 启动服务器
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
@@ -118,12 +119,13 @@ func registerRoutes(router *gin.Engine) {
 
 		// 时光路由
 		moments := v1.Group("/moments")
+		moments.Use(middleware.Auth())
 		{
 			moments.GET("", momentHandler.ListMoments)
 			moments.GET("/:id", momentHandler.GetMoment)
-			moments.POST("", middleware.Auth(), momentHandler.CreateMoment)
-			moments.PUT("/:id", middleware.Auth(), momentHandler.UpdateMoment)
-			moments.DELETE("/:id", middleware.Auth(), momentHandler.DeleteMoment)
+			moments.POST("", momentHandler.CreateMoment)
+			moments.PUT("/:id", momentHandler.UpdateMoment)
+			moments.DELETE("/:id", momentHandler.DeleteMoment)
 		}
 
 		// 上传路由
@@ -148,32 +150,53 @@ func registerRoutes(router *gin.Engine) {
 
 			// 需要管理员权限的路由
 			adminProtected := admin.Group("")
-			adminProtected.Use(middleware.Auth())
+			adminProtected.Use(middleware.Auth(), middleware.RequireAdmin(), middleware.AdminOperationLogger())
 			{
 				// 管理员信息
 				adminProtected.GET("/me", adminHandler.GetCurrentAdmin)
 
 				// 用户管理
-				adminProtected.GET("/users", adminHandler.ListUsers)
-				adminProtected.GET("/users/:user_id/moments", adminHandler.ListUserMoments)
-				adminProtected.POST("/users", adminHandler.CreateUser)
-				adminProtected.PUT("/users/:id", adminHandler.UpdateUser)
-				adminProtected.DELETE("/users/:id", adminHandler.DeleteUser)
-				adminProtected.PATCH("/users/:id/toggle-status", adminHandler.ToggleUserStatus)
-				adminProtected.PUT("/users/:id/roles", adminHandler.AssignRoles)
+				userAdmin := adminProtected.Group("")
+				userAdmin.Use(middleware.RequirePermission("system:user"))
+				{
+					userAdmin.GET("/users", adminHandler.ListUsers)
+					userAdmin.POST("/users", adminHandler.CreateUser)
+					userAdmin.PUT("/users/:id", adminHandler.UpdateUser)
+					userAdmin.DELETE("/users/:id", adminHandler.DeleteUser)
+					userAdmin.PATCH("/users/:id/toggle-status", adminHandler.ToggleUserStatus)
+					userAdmin.PUT("/users/:id/roles", adminHandler.AssignRoles)
+				}
+
+				momentAdmin := adminProtected.Group("")
+				momentAdmin.Use(middleware.RequirePermission("moment:list"))
+				{
+					momentAdmin.GET("/users/:user_id/moments", adminHandler.ListUserMoments)
+				}
 
 				// 角色管理
-				adminProtected.GET("/roles", adminHandler.ListRoles)
-				adminProtected.POST("/roles", adminHandler.CreateRole)
-				adminProtected.PUT("/roles/:id", adminHandler.UpdateRole)
-				adminProtected.DELETE("/roles/:id", adminHandler.DeleteRole)
-				adminProtected.PUT("/roles/:id/permissions", adminHandler.AssignPermissions)
+				roleAdmin := adminProtected.Group("")
+				roleAdmin.Use(middleware.RequirePermission("system:role"))
+				{
+					roleAdmin.GET("/roles", adminHandler.ListRoles)
+					roleAdmin.POST("/roles", adminHandler.CreateRole)
+					roleAdmin.PUT("/roles/:id", adminHandler.UpdateRole)
+					roleAdmin.DELETE("/roles/:id", adminHandler.DeleteRole)
+					roleAdmin.PUT("/roles/:id/permissions", adminHandler.AssignPermissions)
+				}
 
 				// 权限管理
-				adminProtected.GET("/permissions", adminHandler.ListPermissions)
+				permissionAdmin := adminProtected.Group("")
+				permissionAdmin.Use(middleware.RequirePermission("system:permission"))
+				{
+					permissionAdmin.GET("/permissions", adminHandler.ListPermissions)
+				}
 
 				// 日志管理
-				adminProtected.GET("/logs", adminHandler.ListOperationLogs)
+				logAdmin := adminProtected.Group("")
+				logAdmin.Use(middleware.RequirePermission("system:log"))
+				{
+					logAdmin.GET("/logs", adminHandler.ListOperationLogs)
+				}
 			}
 		}
 	}

@@ -32,14 +32,16 @@ CREATE TABLE IF NOT EXISTS `users` (
 CREATE TABLE IF NOT EXISTS `moments` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录ID',
     `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+    `client_id` VARCHAR(64) DEFAULT NULL COMMENT '客户端本地记录ID（用于幂等创建）',
     `content` TEXT NOT NULL COMMENT '记录内容',
-    `media_type` VARCHAR(20) NOT NULL DEFAULT 'text' COMMENT '媒体类型：text/image/audio/video',
+    `media_type` VARCHAR(20) NOT NULL DEFAULT 'text' COMMENT '媒体类型：text/image/audio/video/mixed',
     `media_paths` JSON DEFAULT NULL COMMENT '媒体文件路径（JSON数组）',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `deleted_at` DATETIME DEFAULT NULL COMMENT '删除时间（软删除）',
     PRIMARY KEY (`id`),
     KEY `idx_user_id` (`user_id`),
+    UNIQUE KEY `uk_moments_user_client_id` (`user_id`, `client_id`),
     KEY `idx_created_at` (`created_at`),
     KEY `idx_deleted_at` (`deleted_at`),
     CONSTRAINT `fk_moments_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE

@@ -10,6 +10,7 @@ import 'screens/moment_detail_screen.dart';
 import 'screens/edit_moment_screen.dart';
 import 'screens/login_screen.dart';
 import 'sqflite_platform.dart';
+import 'widgets/liquid_glass.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,8 +28,13 @@ class MomentApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => AuthProvider()..initialize(),
         ),
-        ChangeNotifierProvider(
-          create: (_) => MomentProvider()..initialize(),
+        ChangeNotifierProxyProvider<AuthProvider, MomentProvider>(
+          create: (_) => MomentProvider(),
+          update: (_, auth, moments) {
+            final provider = moments ?? MomentProvider();
+            provider.bindUser(auth.user?.id);
+            return provider;
+          },
         ),
       ],
       child: const _AppWithRouter(),
@@ -42,25 +48,144 @@ class _AppWithRouter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final base = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: kLiquidGlassAccent,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: kLiquidGlassAccent,
+        secondary: const Color(0xFF89A8FF),
+        surface: Colors.white.withOpacity(0.18),
+        surfaceContainerHighest: Colors.white.withOpacity(0.24),
+        onSurface: kLiquidGlassInk,
+      ),
+    );
 
     return MaterialApp.router(
       title: '拾光记',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
+      theme: base.copyWith(
+        scaffoldBackgroundColor: Colors.transparent,
+        canvasColor: Colors.transparent,
+        textTheme: base.textTheme.apply(
+          bodyColor: kLiquidGlassInk,
+          displayColor: kLiquidGlassInk,
         ),
-        useMaterial3: true,
         appBarTheme: const AppBarTheme(
-          centerTitle: true,
+          centerTitle: false,
           elevation: 0,
-        ),
-        cardTheme: CardTheme(
-          elevation: 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: kLiquidGlassInk,
+          titleTextStyle: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w700,
+            color: kLiquidGlassInk,
+            letterSpacing: -0.8,
           ),
+        ),
+        cardColor: Colors.white.withOpacity(0.2),
+        cardTheme: CardTheme(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: Colors.white.withOpacity(0.2),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: Colors.white.withOpacity(0.42)),
+          ),
+        ),
+        dividerColor: Colors.white.withOpacity(0.42),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.2),
+          hintStyle: const TextStyle(color: kLiquidGlassMuted),
+          labelStyle: const TextStyle(color: kLiquidGlassMuted),
+          prefixIconColor: kLiquidGlassMuted,
+          suffixIconColor: kLiquidGlassMuted,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 18,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.4)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.42)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: const BorderSide(color: kLiquidGlassAccent, width: 1.4),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            foregroundColor: Colors.white,
+            backgroundColor: kLiquidGlassAccent,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: kLiquidGlassAccent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: kLiquidGlassInk,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            side: BorderSide(color: Colors.white.withOpacity(0.46)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: kLiquidGlassAccent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: kLiquidGlassInk.withOpacity(0.88),
+          contentTextStyle: const TextStyle(color: Colors.white),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        bottomSheetTheme: BottomSheetThemeData(
+          backgroundColor: Colors.white.withOpacity(0.22),
+          modalBackgroundColor: Colors.white.withOpacity(0.22),
+          surfaceTintColor: Colors.transparent,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+        ),
+        dialogTheme: DialogTheme(
+          backgroundColor: Colors.white.withOpacity(0.26),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+            side: BorderSide(color: Colors.white.withOpacity(0.42)),
+          ),
+        ),
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: kLiquidGlassAccent,
         ),
       ),
       routerConfig: _router,
@@ -68,8 +193,26 @@ class _AppWithRouter extends StatelessWidget {
         // 等待认证状态初始化完成
         if (!authProvider.isInitialized) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
+            body: LiquidGlassBackground(
+              child: Center(
+                child: LiquidGlassCard(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        '正在唤醒你的时光',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           );
         }

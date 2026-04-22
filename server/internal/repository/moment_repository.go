@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"time"
 
 	"github.com/moment-server/moment-server/internal/model"
@@ -24,18 +25,31 @@ type MomentFilter struct {
 
 // AdminMomentFilter 管理端按用户查询时光
 type AdminMomentFilter struct {
-	UserID               uint64
-	MediaType            string // 空表示不限
-	CreatedFrom          *time.Time
-	CreatedToEnd         *time.Time // 上界（不含），用于按自然日区间
-	CreatedToInclusive   *time.Time // 若设置：created_at <= 该时刻（用于 RFC3339）
-	Keyword              string
-	IncludeDeleted       bool
+	UserID             uint64
+	MediaType          string // 空表示不限
+	CreatedFrom        *time.Time
+	CreatedToEnd       *time.Time // 上界（不含），用于按自然日区间
+	CreatedToInclusive *time.Time // 若设置：created_at <= 该时刻（用于 RFC3339）
+	Keyword            string
+	IncludeDeleted     bool
 }
 
 // Create 创建记录
 func (r *MomentRepository) Create(moment *model.Moment) error {
 	return r.db.Create(moment).Error
+}
+
+// FindByUserIDAndClientID 按用户和客户端记录 ID 查询
+func (r *MomentRepository) FindByUserIDAndClientID(userID uint64, clientID string) (*model.Moment, error) {
+	var moment model.Moment
+	err := r.db.
+		Where("user_id = ? AND client_id = ? AND deleted_at IS NULL", userID, clientID).
+		First(&moment).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return &moment, nil
 }
 
 // FindByID 按ID查询
@@ -120,6 +134,25 @@ func (r *MomentRepository) Delete(id, userID uint64) error {
 	return r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Moment{}).Error
 }
 
+// CountOtherReferencesByMediaPath 统计其他未删除记录是否仍引用同一媒体路径
+// managedPath 必须是标准化后的 /uploads/... 公共路径。
+func (r *MomentRepository) CountOtherReferencesByMediaPath(managedPath string, excludeMomentID uint64) (int64, error) {
+	var count int64
+	pattern := "%" + escapeLike(managedPath) + "%"
+
+	err := r.db.Model(&model.Moment{}).
+		Where("deleted_at IS NULL").
+		Where("id <> ?", excludeMomentID).
+		Where(
+			"(JSON_SEARCH(media_paths, 'one', ?) IS NOT NULL OR CAST(media_paths AS CHAR) LIKE ? ESCAPE '\\\\')",
+			managedPath,
+			pattern,
+		).
+		Count(&count).Error
+
+	return count, err
+}
+
 // CountByUserID 统计用户记录数
 func (r *MomentRepository) CountByUserID(userID uint64) (int64, error) {
 	var count int64
@@ -151,4 +184,13 @@ func (r *MomentRepository) CountByMediaType(userID uint64) (map[model.MediaType]
 	}
 
 	return counts, nil
+}
+
+func escapeLike(value string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"%", "\\%",
+		"_", "\\_",
+	)
+	return replacer.Replace(value)
 }

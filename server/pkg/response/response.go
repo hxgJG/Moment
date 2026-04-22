@@ -73,10 +73,7 @@ func SuccessPage(c *gin.Context, list interface{}, total int64, page, pageSize i
 
 // Error 错误响应
 func Error(c *gin.Context, code int, msg string) {
-	c.JSON(http.StatusOK, Response{
-		Code: code,
-		Msg:  msg,
-	})
+	ErrorWithStatus(c, httpStatusForCode(code), code, msg)
 }
 
 // BadRequest 400 错误
@@ -115,4 +112,28 @@ func ErrorWithStatus(c *gin.Context, httpStatus int, code int, msg string) {
 		Code: code,
 		Msg:  msg,
 	})
+}
+
+func httpStatusForCode(code int) int {
+	switch code {
+	case CodeBadRequest:
+		return http.StatusBadRequest
+	case CodeUnauthorized:
+		return http.StatusUnauthorized
+	case CodeForbidden:
+		return http.StatusForbidden
+	case CodeNotFound:
+		return http.StatusNotFound
+	case CodeConflict:
+		return http.StatusConflict
+	case CodeInternalError:
+		return http.StatusInternalServerError
+	case CodeSuccess:
+		return http.StatusOK
+	default:
+		if code >= 400 && code <= 599 {
+			return code
+		}
+		return http.StatusBadRequest
+	}
 }

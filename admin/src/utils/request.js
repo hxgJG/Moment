@@ -17,6 +17,24 @@ const refreshClient = axios.create({
 let refreshing = false
 const refreshWaiters = []
 
+function isSuccessEnvelope(body) {
+  return !!body && typeof body === 'object' && body.code === 200
+}
+
+function envelopeMessage(body) {
+  if (!body || typeof body !== 'object') {
+    return null
+  }
+  return body.msg || body.message || null
+}
+
+function unwrapEnvelopeData(body) {
+  if (!isSuccessEnvelope(body) || !body.data || typeof body.data !== 'object') {
+    return null
+  }
+  return body.data
+}
+
 function isAdminAuthPath(url) {
   return url && (url.includes('/admin/login') || url.includes('/admin/refresh'))
 }
@@ -34,15 +52,72 @@ async function tryRefreshAdminToken() {
   const { data: body } = await refreshClient.post('/admin/refresh', {
     refresh_token: rt
   })
-  if (body.code !== 200 || !body.data?.token) {
+  const data = unwrapEnvelopeData(body)
+  if (!data?.token) {
     return null
   }
   const store = useAdminStore()
-  store.setTokens(body.data.token, body.data.refresh_token)
-  if (body.data.user) {
-    store.setUser(body.data.user)
+  store.setTokens(data.token, data.refresh_token)
+  if (data.user) {
+    store.setUser(data.user)
   }
-  return body.data.token
+  return data.token
+}
+
+function rejectQueuedRefreshWaiters(message) {
+  refreshWaiters.splice(0).forEach(({ reject }) => {
+    reject(new Error(message))
+  })
+}
+
+async function retryWithRefreshedToken(config) {
+  const rt = localStorage.getItem('admin_refresh_token')
+  if (!rt) {
+    clearAdminSession()
+    router.push('/login')
+    ElMessage.error('登录已过期，请重新登录')
+    throw new Error('登录已过期')
+  }
+
+  if (refreshing) {
+    return new Promise((resolve, reject) => {
+      refreshWaiters.push({ resolve, reject, config })
+    })
+  }
+
+  refreshing = true
+  config._authRetry = true
+
+  try {
+    const newAccess = await tryRefreshAdminToken()
+    if (!newAccess) {
+      throw new Error('refresh failed')
+    }
+
+    const queued = refreshWaiters.splice(0, refreshWaiters.length)
+    for (const waiter of queued) {
+      waiter.config.headers = waiter.config.headers || {}
+      waiter.config.headers.Authorization = `Bearer ${newAccess}`
+    }
+
+    config.headers = config.headers || {}
+    config.headers.Authorization = `Bearer ${newAccess}`
+
+    const waiterPromises = queued.map((waiter) =>
+      request(waiter.config).then(waiter.resolve, waiter.reject)
+    )
+    const mainResult = await request(config)
+    await Promise.all(waiterPromises)
+    return mainResult
+  } catch (error) {
+    rejectQueuedRefreshWaiters('登录已过期')
+    clearAdminSession()
+    router.push('/login')
+    ElMessage.error('登录已过期，请重新登录')
+    throw error
+  } finally {
+    refreshing = false
+  }
 }
 
 // 请求拦截器
@@ -61,76 +136,35 @@ request.interceptors.request.use(
 
 // 响应拦截器
 request.interceptors.response.use(
-  async (response) => {
+  (response) => {
     const res = response.data
-    const cfg = response.config
-
-    if (res.code === 401 && !cfg._authRetry && !isAdminAuthPath(cfg.url)) {
-      const rt = localStorage.getItem('admin_refresh_token')
-      if (!rt) {
-        ElMessage.error(res.msg || '登录已过期，请重新登录')
-        clearAdminSession()
-        router.push('/login')
-        return Promise.reject(new Error(res.msg || '未登录'))
-      }
-
-      if (refreshing) {
-        return new Promise((resolve, reject) => {
-          refreshWaiters.push({ resolve, reject, config: cfg })
-        })
-      }
-
-      refreshing = true
-      cfg._authRetry = true
-
-      try {
-        const newAccess = await tryRefreshAdminToken()
-        if (!newAccess) {
-          throw new Error('refresh failed')
-        }
-        const queued = refreshWaiters.splice(0, refreshWaiters.length)
-        for (const q of queued) {
-          q.config.headers.Authorization = `Bearer ${newAccess}`
-        }
-        cfg.headers.Authorization = `Bearer ${newAccess}`
-        const waiterPromises = queued.map((q) =>
-          request(q.config).then(q.resolve, q.reject)
-        )
-        const mainResult = await request(cfg)
-        await Promise.all(waiterPromises)
-        return mainResult
-      } catch {
-        refreshWaiters.splice(0).forEach(({ reject }) => {
-          reject(new Error('登录已过期'))
-        })
-        ElMessage.error('登录已过期，请重新登录')
-        clearAdminSession()
-        router.push('/login')
-        return Promise.reject(new Error('登录已过期'))
-      } finally {
-        refreshing = false
-      }
-    }
-
-    if (res.code !== 200) {
-      ElMessage.error(res.msg || '请求失败')
-      return Promise.reject(new Error(res.msg || '请求失败'))
+    if (!isSuccessEnvelope(res)) {
+      const message = envelopeMessage(res) || '请求失败'
+      ElMessage.error(message)
+      return Promise.reject(new Error(message))
     }
     return res
   },
-  (error) => {
+  async (error) => {
     if (error.response) {
-      const { status, data } = error.response
+      const { status, data, config } = error.response
       if (status === 401) {
+        if (!config?._authRetry && !isAdminAuthPath(config?.url)) {
+          try {
+            return await retryWithRefreshedToken(config)
+          } catch (refreshError) {
+            return Promise.reject(refreshError)
+          }
+        }
         clearAdminSession()
         router.push('/login')
-        ElMessage.error('登录已过期，请重新登录')
+        ElMessage.error(data?.msg || '登录已过期，请重新登录')
       } else if (status === 403) {
-        ElMessage.error('没有权限')
+        ElMessage.error(data?.msg || '没有权限')
       } else if (status === 404) {
-        ElMessage.error('资源不存在')
+        ElMessage.error(data?.msg || '资源不存在')
       } else if (status >= 500) {
-        ElMessage.error('服务器错误')
+        ElMessage.error(data?.msg || '服务器错误')
       } else {
         ElMessage.error(data?.msg || '请求失败')
       }

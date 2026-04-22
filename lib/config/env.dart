@@ -10,6 +10,19 @@ class EnvConfig {
     defaultValue: 'http://127.0.0.1:8080/v1',
   );
 
+  /// 不带 `/v1` 的服务端根地址，用于访问 `/uploads/**` 等静态资源。
+  static String get serverBaseUrl {
+    final uri = Uri.parse(apiBaseUrl);
+    final segments = List<String>.from(uri.pathSegments);
+    if (segments.isNotEmpty && segments.last == 'v1') {
+      segments.removeLast();
+    }
+    return uri
+        .replace(pathSegments: segments)
+        .toString()
+        .replaceAll(RegExp(r'/$'), '');
+  }
+
   /// 连接超时（连错地址时会卡满该时长；登录等已关闭重试）
   static const Duration connectTimeout = Duration(seconds: 15);
 

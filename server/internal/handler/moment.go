@@ -14,7 +14,15 @@ import (
 
 // MomentHandler 时光记录处理器
 type MomentHandler struct {
-	momentService *service.MomentService
+	momentService momentService
+}
+
+type momentService interface {
+	ListMoments(userID uint64, page, pageSize int) ([]*service.MomentResponse, int64, error)
+	CreateMoment(userID uint64, req *service.CreateMomentRequest) (*service.MomentResponse, error)
+	GetMoment(id, userID uint64) (*service.MomentResponse, error)
+	UpdateMoment(id, userID uint64, req *service.UpdateMomentRequest) (*service.MomentResponse, error)
+	DeleteMoment(id, userID uint64) error
 }
 
 // NewMomentHandler 创建时光记录处理器
@@ -104,16 +112,26 @@ func (h *MomentHandler) CreateMoment(c *gin.Context) {
 // @Success 200 {object} response.Response{data=service.MomentResponse}
 // @Router /v1/moments/{id} [get]
 func (h *MomentHandler) GetMoment(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(c, "unauthorized")
+		return
+	}
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid id")
 		return
 	}
 
-	result, err := h.momentService.GetMoment(id)
+	result, err := h.momentService.GetMoment(id, userID)
 	if err != nil {
 		if errors.Is(err, service.ErrMomentNotFound) {
 			response.NotFound(c, "moment not found")
+			return
+		}
+		if errors.Is(err, service.ErrForbidden) {
+			response.Forbidden(c, "forbidden")
 			return
 		}
 		response.InternalServerError(c, err.Error())

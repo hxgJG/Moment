@@ -1,11 +1,13 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/moment_record.dart';
+import 'storage_service.dart';
 
 /// 数据库服务 - 管理本地SQLite数据库
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
+  final StorageService _storage = StorageService();
 
   factory DatabaseService() => _instance;
 
@@ -20,11 +22,15 @@ class DatabaseService {
 
   /// 初始化数据库
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'moment.db');
+    final path = join(await getDatabasesPath(), 'moment.db');
+    final currentUserId = await _storage.getUserId();
     return await openDatabase(
       path,
-      version: 1,
+      version: 4,
       onCreate: _onCreate,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await _onUpgrade(db, oldVersion, newVersion, currentUserId);
+      },
     );
   }
 
@@ -33,21 +39,90 @@ class DatabaseService {
     await db.execute('''
       CREATE TABLE moments (
         id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        server_id TEXT,
         content TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT,
         media_type INTEGER NOT NULL,
         media_paths TEXT NOT NULL,
-        synced INTEGER NOT NULL DEFAULT 0
+        synced INTEGER NOT NULL DEFAULT 0,
+        sync_status INTEGER NOT NULL DEFAULT 0,
+        last_synced_at TEXT,
+        conflict_remote_updated_at TEXT
       )
     ''');
+    await db.execute(
+      'CREATE INDEX idx_moments_user_id_created_at ON moments(user_id, created_at DESC)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX idx_moments_user_id_server_id ON moments(user_id, server_id)',
+    );
+  }
+
+  Future<void> _onUpgrade(
+    Database db,
+    int oldVersion,
+    int newVersion,
+    String? currentUserId,
+  ) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        "ALTER TABLE moments ADD COLUMN user_id TEXT NOT NULL DEFAULT ''",
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_moments_user_id_created_at ON moments(user_id, created_at DESC)',
+      );
+      if (currentUserId != null && currentUserId.isNotEmpty) {
+        await db.update(
+          'moments',
+          {'user_id': currentUserId},
+          where: "user_id = ''",
+        );
+      }
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE moments ADD COLUMN server_id TEXT');
+      await db.execute(
+        'ALTER TABLE moments ADD COLUMN sync_status INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute('ALTER TABLE moments ADD COLUMN last_synced_at TEXT');
+      await db.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_moments_user_id_server_id ON moments(user_id, server_id)',
+      );
+      await db.execute('''
+        UPDATE moments
+        SET
+          server_id = CASE
+            WHEN synced = 1 AND id GLOB '[0-9]*' THEN id
+            ELSE NULL
+          END,
+          sync_status = CASE
+            WHEN synced = 1 THEN ${SyncStatus.synced.index}
+            WHEN id GLOB '[0-9]*' THEN ${SyncStatus.pendingUpload.index}
+            ELSE ${SyncStatus.localOnly.index}
+          END,
+          last_synced_at = CASE
+            WHEN synced = 1 THEN COALESCE(updated_at, created_at)
+            ELSE NULL
+          END
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute(
+        'ALTER TABLE moments ADD COLUMN conflict_remote_updated_at TEXT',
+      );
+    }
   }
 
   /// 插入记录
-  Future<void> insertMoment(MomentRecord record, {bool synced = false}) async {
+  Future<void> insertMoment(
+    MomentRecord record, {
+    required String userId,
+  }) async {
     final db = await database;
     final map = record.toMap();
-    map['synced'] = synced ? 1 : 0;
+    map['user_id'] = userId;
     await db.insert(
       'moments',
       map,
@@ -56,75 +131,107 @@ class DatabaseService {
   }
 
   /// 删除记录
-  Future<void> deleteMoment(String id) async {
+  Future<void> deleteMoment(String id, {required String userId}) async {
     final db = await database;
     await db.delete(
       'moments',
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, userId],
     );
   }
 
   /// 更新记录
-  Future<void> updateMoment(MomentRecord record) async {
+  Future<void> updateMoment(
+    MomentRecord record, {
+    required String userId,
+  }) async {
     final db = await database;
     await db.update(
       'moments',
-      record.toMap(),
-      where: 'id = ?',
-      whereArgs: [record.id],
+      {
+        ...record.toMap(),
+        'user_id': userId,
+      },
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [record.id, userId],
     );
   }
 
   /// 获取所有记录（按时间倒序）
-  Future<List<MomentRecord>> getAllMoments() async {
+  Future<List<MomentRecord>> getAllMoments({required String userId}) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       'moments',
+      where: 'user_id = ?',
+      whereArgs: [userId],
       orderBy: 'created_at DESC',
     );
     return List.generate(maps.length, (i) => MomentRecord.fromMap(maps[i]));
   }
 
   /// 获取单条记录
-  Future<MomentRecord?> getMoment(String id) async {
+  Future<MomentRecord?> getMoment(String id, {required String userId}) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       'moments',
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [id, userId],
     );
     if (maps.isEmpty) return null;
     return MomentRecord.fromMap(maps.first);
   }
 
   /// 获取记录统计
-  Future<Map<String, int>> getStatistics() async {
+  Future<Map<String, int>> getStatistics({required String userId}) async {
     final db = await database;
     final total = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM moments'),
-    ) ?? 0;
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM moments WHERE user_id = ?',
+            [userId],
+          ),
+        ) ??
+        0;
 
     // 按媒体类型统计
     final imageCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM moments WHERE media_type = ?', [MediaType.image.index]),
-    ) ?? 0;
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM moments WHERE user_id = ? AND media_type = ?',
+            [userId, MediaType.image.index],
+          ),
+        ) ??
+        0;
 
     final audioCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM moments WHERE media_type = ?', [MediaType.audio.index]),
-    ) ?? 0;
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM moments WHERE user_id = ? AND media_type = ?',
+            [userId, MediaType.audio.index],
+          ),
+        ) ??
+        0;
 
     final videoCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM moments WHERE media_type = ?', [MediaType.video.index]),
-    ) ?? 0;
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM moments WHERE user_id = ? AND media_type = ?',
+            [userId, MediaType.video.index],
+          ),
+        ) ??
+        0;
 
     final textCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM moments WHERE media_type = ?', [MediaType.text.index]),
-    ) ?? 0;
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM moments WHERE user_id = ? AND media_type = ?',
+            [userId, MediaType.text.index],
+          ),
+        ) ??
+        0;
 
     final mixedCount = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM moments WHERE media_type = ?', [MediaType.mixed.index]),
-    ) ?? 0;
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM moments WHERE user_id = ? AND media_type = ?',
+            [userId, MediaType.mixed.index],
+          ),
+        ) ??
+        0;
 
     return {
       'total': total,
@@ -137,56 +244,159 @@ class DatabaseService {
   }
 
   /// 获取未同步的记录
-  Future<List<MomentRecord>> getUnsyncedMoments() async {
+  Future<List<MomentRecord>> getUnsyncedMoments(
+      {required String userId}) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       'moments',
-      where: 'synced = ?',
-      whereArgs: [0],
+      where: 'user_id = ? AND sync_status IN (?, ?)',
+      whereArgs: [
+        userId,
+        SyncStatus.localOnly.index,
+        SyncStatus.pendingUpload.index,
+      ],
       orderBy: 'created_at DESC',
     );
     return List.generate(maps.length, (i) => MomentRecord.fromMap(maps[i]));
   }
 
-  /// 标记记录为已同步
-  Future<void> markAsSynced(String id) async {
+  /// 获取冲突中的记录
+  Future<List<MomentRecord>> getConflictMoments(
+      {required String userId}) async {
     final db = await database;
-    await db.update(
+    final List<Map<String, dynamic>> maps = await db.query(
       'moments',
-      {'synced': 1},
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'user_id = ? AND sync_status = ?',
+      whereArgs: [userId, SyncStatus.conflict.index],
+      orderBy: 'created_at DESC',
+    );
+    return List.generate(maps.length, (i) => MomentRecord.fromMap(maps[i]));
+  }
+
+  /// 保存同步后的记录状态
+  Future<void> saveSyncedMoment(
+    MomentRecord record, {
+    required String userId,
+  }) async {
+    final db = await database;
+    final map = record.toMap();
+    map['user_id'] = userId;
+    await db.insert(
+      'moments',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  /// 将所有记录标为未同步（用于服务端校验修复后重新上传）
-  Future<int> resetAllMomentsSyncFlags() async {
+  /// 将所有记录重新加入同步队列（用于修复历史状态或重试同步）
+  Future<int> resetAllMomentsSyncFlags({required String userId}) async {
     final db = await database;
-    return db.rawUpdate('UPDATE moments SET synced = 0');
+    return db.rawUpdate(
+      '''
+      UPDATE moments
+      SET
+        synced = 0,
+        sync_status = CASE
+          WHEN server_id IS NULL OR server_id = '' THEN ?
+          ELSE ?
+        END,
+        last_synced_at = NULL
+      WHERE user_id = ?
+      ''',
+      [
+        SyncStatus.localOnly.index,
+        SyncStatus.pendingUpload.index,
+        userId,
+      ],
+    );
   }
 
-  /// 同步成功后用服务端返回的记录替换本地行（主键从本地 UUID 变为服务端数字 id）
-  Future<void> replaceMomentAfterSync(String oldLocalId, MomentRecord serverRecord) async {
+  /// 将冲突记录重新标记为待上传，表示用户确认以本地为准覆盖云端
+  Future<int> promoteConflictMomentsForUpload({required String userId}) async {
     final db = await database;
-    await db.transaction((txn) async {
-      await txn.delete(
-        'moments',
-        where: 'id = ?',
-        whereArgs: [oldLocalId],
-      );
-      final map = serverRecord.toMap();
-      map['synced'] = 1;
-      await txn.insert(
-        'moments',
-        map,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    });
+    return db.update(
+      'moments',
+      {
+        'synced': 0,
+        'sync_status': SyncStatus.pendingUpload.index,
+        'conflict_remote_updated_at': null,
+      },
+      where: 'user_id = ? AND sync_status = ?',
+      whereArgs: [userId, SyncStatus.conflict.index],
+    );
+  }
+
+  /// 将单条冲突记录重新标记为待上传
+  Future<int> promoteConflictMomentForUpload(
+    String id, {
+    required String userId,
+  }) async {
+    final db = await database;
+    return db.update(
+      'moments',
+      {
+        'synced': 0,
+        'sync_status': SyncStatus.pendingUpload.index,
+        'conflict_remote_updated_at': null,
+      },
+      where: 'id = ? AND user_id = ? AND sync_status = ?',
+      whereArgs: [id, userId, SyncStatus.conflict.index],
+    );
+  }
+
+  Future<MomentRecord?> getMomentByServerId(
+    String serverId, {
+    required String userId,
+  }) async {
+    final db = await database;
+    final maps = await db.query(
+      'moments',
+      where: 'user_id = ? AND server_id = ?',
+      whereArgs: [userId, serverId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return MomentRecord.fromMap(maps.first);
+  }
+
+  Future<void> upsertMomentByServerId(
+    String serverId,
+    MomentRecord serverRecord, {
+    required String userId,
+  }) async {
+    final existing = await getMomentByServerId(serverId, userId: userId);
+    final nextRecord = serverRecord.copyWith(
+      id: existing?.id ?? serverRecord.id,
+      serverId: serverId,
+    );
+    await saveSyncedMoment(nextRecord, userId: userId);
+  }
+
+  /// 保留本地主键并回填服务端标识
+  Future<void> attachServerIdentity(
+    String localId,
+    MomentRecord serverRecord, {
+    required String userId,
+  }) async {
+    final db = await database;
+    await db.update(
+      'moments',
+      {
+        ...serverRecord.toMap(),
+        'id': localId,
+        'user_id': userId,
+      },
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [localId, userId],
+    );
   }
 
   /// 关闭数据库
   Future<void> close() async {
-    final db = await database;
+    final db = _database;
+    if (db == null) {
+      return;
+    }
     await db.close();
     _database = null;
   }

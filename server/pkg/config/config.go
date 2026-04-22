@@ -85,12 +85,22 @@ type LogConfig struct {
 
 // DSN 返回数据库连接字符串（强制 utf8mb4 + collation，避免中文按 latin1 误读导致乱码）
 func (d *DatabaseConfig) DSN() string {
+	return d.DSNForDatabase(d.Database)
+}
+
+// DSNWithoutDatabase 返回不指定默认数据库的连接串，适合建库和迁移预检查。
+func (d *DatabaseConfig) DSNWithoutDatabase() string {
+	return d.DSNForDatabase("")
+}
+
+// DSNForDatabase 返回指定数据库的连接串。
+func (d *DatabaseConfig) DSNForDatabase(database string) string {
 	cs := strings.TrimSpace(d.Charset)
 	if cs == "" || strings.EqualFold(cs, "utf8") {
 		cs = "utf8mb4"
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local",
-		d.Username, d.Password, d.Host, d.Port, d.Database, cs)
+		d.Username, d.Password, d.Host, d.Port, database, cs)
 }
 
 // Addr 返回 Redis 地址

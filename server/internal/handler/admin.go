@@ -16,16 +16,24 @@ import (
 // AdminHandler 管理端处理器
 type AdminHandler struct {
 	userService       *service.UserService
+	authService       adminAuthService
 	roleService       *service.RoleService
 	permissionService *service.PermissionService
 	logService        *service.LogService
 	momentService     *service.MomentService
 }
 
+type adminAuthService interface {
+	AdminLogin(req *service.AdminLoginRequest) (*service.AdminLoginResponse, error)
+	AdminRefreshToken(req *service.AdminRefreshRequest) (*service.AdminLoginResponse, error)
+}
+
 // NewAdminHandler 创建管理端处理器
 func NewAdminHandler() *AdminHandler {
+	userService := service.NewUserService()
 	return &AdminHandler{
-		userService:       service.NewUserService(),
+		userService:       userService,
+		authService:       userService,
 		roleService:       service.NewRoleService(),
 		permissionService: service.NewPermissionService(),
 		logService:        service.NewLogService(),
@@ -48,7 +56,7 @@ func (h *AdminHandler) Login(c *gin.Context) {
 		return
 	}
 
-	result, err := h.userService.AdminLogin(&req)
+	result, err := h.authService.AdminLogin(&req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) {
 			response.Unauthorized(c, "用户名或密码错误")
@@ -73,7 +81,7 @@ func (h *AdminHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	result, err := h.userService.AdminRefreshToken(&req)
+	result, err := h.authService.AdminRefreshToken(&req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidAdminRefresh) {
 			response.Unauthorized(c, "invalid refresh token")
@@ -161,7 +169,7 @@ func (h *AdminHandler) ListUserMoments(c *gin.Context) {
 	mediaType := c.Query("media_type")
 	if mediaType != "" {
 		switch model.MediaType(mediaType) {
-		case model.MediaTypeText, model.MediaTypeImage, model.MediaTypeAudio, model.MediaTypeVideo:
+		case model.MediaTypeText, model.MediaTypeImage, model.MediaTypeAudio, model.MediaTypeVideo, model.MediaTypeMixed:
 		default:
 			response.BadRequest(c, "无效的 media_type")
 			return
@@ -604,7 +612,7 @@ func (h *AdminHandler) GetCurrentAdmin(c *gin.Context) {
 		return
 	}
 
-	result, err := h.userService.GetUserByID(userID)
+	result, err := h.userService.GetAdminProfile(userID)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
 			response.NotFound(c, "用户不存在")

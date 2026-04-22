@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>角色列表</span>
-          <el-button type="primary" @click="handleAdd">
+          <el-button v-if="canManageRoles" type="primary" @click="handleAdd">
             <el-icon><Plus /></el-icon>
             新增角色
           </el-button>
@@ -26,9 +26,20 @@
         <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="primary" link @click="handleAssignPermissions(row)">分配权限</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canManageRoles" type="primary" link @click="handleEdit(row)">
+              编辑
+            </el-button>
+            <el-button
+              v-if="canManageRoles"
+              type="primary"
+              link
+              @click="handleAssignPermissions(row)"
+            >
+              分配权限
+            </el-button>
+            <el-button v-if="canManageRoles" type="danger" link @click="handleDelete(row)">
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -88,11 +99,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getRoleList, createRole, updateRole, deleteRole, assignRolePermissions } from '../api/role'
 import { getPermissionList } from '../api/permission'
+import { useAdminStore } from '../stores/admin'
 
+const adminStore = useAdminStore()
 const loading = ref(false)
 const tableData = ref([])
 const dialogVisible = ref(false)
@@ -118,6 +131,7 @@ const permTreeData = ref([])
 const currentRoleId = ref(null)
 
 const dialogTitle = computed(() => form.id ? '编辑角色' : '新增角色')
+const canManageRoles = computed(() => adminStore.hasPermission('system:role'))
 
 async function loadData() {
   loading.value = true

@@ -39,9 +39,14 @@ class AuthProvider extends ChangeNotifier {
 
   User? _user;
   String? _accessToken;
+  String? _refreshToken;
   bool _isLoading = false;
   bool _isInitialized = false;
   String? _error;
+
+  AuthProvider() {
+    _api.onUnauthorized = _handleUnauthorized;
+  }
 
   /// 当前用户
   User? get user => _user;
@@ -70,6 +75,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       _accessToken = await _storage.getAccessToken();
+      _refreshToken = await _storage.getRefreshToken();
       _user = await _storage.getUserInfo();
     } catch (e) {
       debugPrint('初始化认证状态失败: $e');
@@ -80,37 +86,40 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 后端统一包一层 `{ code, msg, data }`，且错误时 HTTP 也可能为 200
   bool _applyAuthEnvelope(dynamic raw) {
-    if (raw == null) {
-      _error = '服务器响应数据为空 (CORS 或网络问题)';
+    final dataMap = _api.unwrapEnvelopeData(raw);
+    if (dataMap == null) {
+      _error = _api.envelopeMessage(raw) ?? '响应格式错误';
       return false;
     }
-    if (raw is! Map) {
-      _error = '响应格式错误';
-      return false;
-    }
-    final body = Map<String, dynamic>.from(raw);
-    final code = body['code'];
-    if (code != 200) {
-      _error = body['msg']?.toString() ?? '请求失败';
-      return false;
-    }
-    final data = body['data'];
-    if (data is! Map) {
-      _error = '响应缺少 data';
-      return false;
-    }
-    final dataMap = Map<String, dynamic>.from(data);
     final token = dataMap['access_token'] as String?;
+    final refreshToken = dataMap['refresh_token'] as String?;
     final userRaw = dataMap['user'];
-    if (token == null || userRaw is! Map) {
+    if (token == null || refreshToken == null || userRaw is! Map) {
       _error = '登录/注册数据不完整';
       return false;
     }
     _accessToken = token;
+    _refreshToken = refreshToken;
     _user = User.fromJson(Map<String, dynamic>.from(userRaw));
     return true;
+  }
+
+  Future<void> _persistAuthState() async {
+    if (_accessToken == null || _refreshToken == null || _user == null) {
+      return;
+    }
+    await _storage.setAccessToken(_accessToken!);
+    await _storage.setRefreshToken(_refreshToken!);
+    await _storage.setUserId(_user!.id);
+    await _storage.setUserInfo(_user!);
+  }
+
+  void _handleUnauthorized() {
+    _accessToken = null;
+    _refreshToken = null;
+    _user = null;
+    notifyListeners();
   }
 
   /// 登录
@@ -132,19 +141,13 @@ class AuthProvider extends ChangeNotifier {
         retry: false,
       );
 
-      if (response.statusCode == 200 && _applyAuthEnvelope(response.data)) {
-        await _storage.setAccessToken(_accessToken!);
-        await _storage.setUserId(_user!.id);
-        await _storage.setUserInfo(_user!);
+      if (_applyAuthEnvelope(response.data)) {
+        await _persistAuthState();
         _isLoading = false;
         notifyListeners();
         return true;
       }
-      if (response.statusCode != 200) {
-        _error = 'HTTP ${response.statusCode}';
-      } else if (_error == null) {
-        _error = '登录失败';
-      }
+      _error ??= '登录失败';
 
       _isLoading = false;
       notifyListeners();
@@ -179,19 +182,13 @@ class AuthProvider extends ChangeNotifier {
         retry: false,
       );
 
-      if (response.statusCode == 200 && _applyAuthEnvelope(response.data)) {
-        await _storage.setAccessToken(_accessToken!);
-        await _storage.setUserId(_user!.id);
-        await _storage.setUserInfo(_user!);
+      if (_applyAuthEnvelope(response.data)) {
+        await _persistAuthState();
         _isLoading = false;
         notifyListeners();
         return true;
       }
-      if (response.statusCode != 200) {
-        _error = 'HTTP ${response.statusCode}';
-      } else if (_error == null) {
-        _error = '注册失败';
-      }
+      _error ??= '注册失败';
 
       _isLoading = false;
       notifyListeners();
@@ -215,6 +212,7 @@ class AuthProvider extends ChangeNotifier {
       await _storage.clearAll();
 
       _accessToken = null;
+      _refreshToken = null;
       _user = null;
     } catch (e) {
       debugPrint('登出失败: $e');

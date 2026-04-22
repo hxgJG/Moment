@@ -11,10 +11,11 @@ import (
 type MediaType string
 
 const (
-	MediaTypeText   MediaType = "text"
-	MediaTypeImage  MediaType = "image"
-	MediaTypeAudio  MediaType = "audio"
-	MediaTypeVideo  MediaType = "video"
+	MediaTypeText  MediaType = "text"
+	MediaTypeImage MediaType = "image"
+	MediaTypeAudio MediaType = "audio"
+	MediaTypeVideo MediaType = "video"
+	MediaTypeMixed MediaType = "mixed"
 )
 
 // StringSlice JSON序列化的字符串数组
@@ -45,14 +46,15 @@ func (s StringSlice) Value() (driver.Value, error) {
 
 // Moment 时光记录模型
 type Moment struct {
-	ID         uint64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserID     uint64     `gorm:"column:user_id;not null;index" json:"user_id"`
-	Content    string     `gorm:"column:content;type:text;not null" json:"content"`
-	MediaType  MediaType  `gorm:"column:media_type;type:varchar(20);default:'text'" json:"media_type"`
+	ID         uint64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID     uint64      `gorm:"column:user_id;not null;index;uniqueIndex:uk_moments_user_client_id,priority:1" json:"user_id"`
+	ClientID   *string     `gorm:"column:client_id;type:varchar(64);uniqueIndex:uk_moments_user_client_id,priority:2" json:"client_id,omitempty"`
+	Content    string      `gorm:"column:content;type:text;not null" json:"content"`
+	MediaType  MediaType   `gorm:"column:media_type;type:varchar(20);default:'text'" json:"media_type"`
 	MediaPaths StringSlice `gorm:"column:media_paths;type:json" json:"media_paths"`
-	CreatedAt  time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt  time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	DeletedAt  *time.Time `gorm:"column:deleted_at;index" json:"deleted_at,omitempty"`
+	CreatedAt  time.Time   `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time   `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	DeletedAt  *time.Time  `gorm:"column:deleted_at;index" json:"deleted_at,omitempty"`
 }
 
 // TableName 指定表名
@@ -62,6 +64,6 @@ func (Moment) TableName() string {
 
 // MomentStats 记录统计
 type MomentStats struct {
-	Total      int64            `json:"total"`
-	ByType     map[MediaType]int64 `json:"by_type"`
+	Total  int64               `json:"total"`
+	ByType map[MediaType]int64 `json:"by_type"`
 }

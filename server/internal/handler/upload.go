@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/moment-server/moment-server/internal/middleware"
 	"github.com/moment-server/moment-server/internal/service"
@@ -52,6 +54,26 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	result.URL = absoluteMediaURL(c, result.URL)
 
 	response.Success(c, result)
+}
+
+func absoluteMediaURL(c *gin.Context, raw string) string {
+	if raw == "" || strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw
+	}
+
+	scheme := c.GetHeader("X-Forwarded-Proto")
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+	if !strings.HasPrefix(raw, "/") {
+		raw = "/" + raw
+	}
+	return scheme + "://" + c.Request.Host + raw
 }

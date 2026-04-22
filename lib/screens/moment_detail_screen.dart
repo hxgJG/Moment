@@ -7,6 +7,8 @@ import 'package:video_player/video_player.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/moment_provider.dart';
 import '../models/moment_record.dart';
+import '../utils/media_source.dart';
+import '../widgets/liquid_glass.dart';
 
 /// 记录详情页
 class MomentDetailScreen extends StatefulWidget {
@@ -33,7 +35,13 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
   Future<void> _initVideoPlayer(String path) async {
     if (_videoController != null) return;
 
-    _videoController = VideoPlayerController.file(File(path));
+    if (isLocalMediaPath(path)) {
+      _videoController = VideoPlayerController.file(File(path));
+    } else {
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(resolveMediaUrl(path)),
+      );
+    }
     await _videoController!.initialize();
     setState(() {
       _isVideoInitialized = true;
@@ -49,7 +57,11 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
         if (record == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('详情')),
-            body: const Center(child: Text('记录不存在')),
+            body: const LiquidGlassBackground(
+              child: Center(
+                child: LiquidGlassCard(child: Text('记录不存在')),
+              ),
+            ),
           );
         }
 
@@ -57,7 +69,20 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('记录详情'),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('记录详情'),
+                Text(
+                  '查看这段回忆的完整折射',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.55),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
             actions: [
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
@@ -69,61 +94,72 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
               ),
             ],
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 时间
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      dateFormat.format(record.createdAt),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // 媒体类型
-                _MediaTypeChip(mediaType: record.mediaType),
-                const SizedBox(height: 16),
-
-                // 文字内容
-                if (record.content.isNotEmpty) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      record.content,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        height: 1.6,
-                      ),
+          body: LiquidGlassBackground(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LiquidGlassCard(
+                    tintColor: const Color(0xFFCFE0FF),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 16,
+                              color: Colors.grey[700],
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              dateFormat.format(record.createdAt),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _MediaTypeChip(mediaType: record.mediaType),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (record.syncStatus == SyncStatus.conflict) ...[
+                    _ConflictNotice(
+                      record: record,
+                      provider: provider,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (record.content.isNotEmpty) ...[
+                    LiquidGlassCard(
+                      child: Text(
+                        record.content,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (record.hasMedia)
+                    LiquidGlassCard(
+                      tintColor: const Color(0xFFFFE6C7),
+                      child: _MediaContent(
+                        record: record,
+                        audioPlayer: _audioPlayer,
+                        videoController: _videoController,
+                        isVideoInitialized: _isVideoInitialized,
+                        initVideoPlayer: _initVideoPlayer,
+                      ),
+                    ),
                 ],
-
-                // 媒体内容
-                if (record.hasMedia)
-                  _MediaContent(
-                    record: record,
-                    audioPlayer: _audioPlayer,
-                    videoController: _videoController,
-                    isVideoInitialized: _isVideoInitialized,
-                    initVideoPlayer: _initVideoPlayer,
-                  ),
-              ],
+              ),
             ),
           ),
         );
@@ -131,7 +167,8 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, MomentProvider provider, MomentRecord record) {
+  void _showDeleteDialog(
+      BuildContext context, MomentProvider provider, MomentRecord record) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -152,6 +189,167 @@ class _MomentDetailScreenState extends State<MomentDetailScreen> {
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConflictNotice extends StatelessWidget {
+  final MomentRecord record;
+  final MomentProvider provider;
+
+  const _ConflictNotice({
+    required this.record,
+    required this.provider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = DateFormat('yyyy-MM-dd HH:mm');
+    final localUpdatedAt = record.updatedAt ?? record.createdAt;
+    final lastSyncedAt = record.lastSyncedAt;
+    final remoteUpdatedAt = record.conflictRemoteUpdatedAt;
+
+    return LiquidGlassCard(
+      tintColor: const Color(0xFFFFD7D7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.sync_problem_outlined, color: Colors.red[700]),
+              const SizedBox(width: 8),
+              Text(
+                '这条记录存在同步冲突',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '当前设备上的本地修改和服务端版本都发生了变化。你可以选择保留本地版本继续上传，或直接使用最新云端版本覆盖本地。',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: Colors.red[700],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '本地最近修改：${formatter.format(localUpdatedAt)}',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.5,
+              color: Colors.red[700],
+            ),
+          ),
+          if (lastSyncedAt != null)
+            Text(
+              '最近成功同步：${formatter.format(lastSyncedAt)}',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: Colors.red[700],
+              ),
+            ),
+          if (remoteUpdatedAt != null)
+            Text(
+              '检测到云端更新：${formatter.format(remoteUpdatedAt)}',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: Colors.red[700],
+              ),
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: provider.isSyncing
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('保留本地版本'),
+                            content: const Text(
+                              '确定将这条冲突记录改为待上传吗？下一次同步会以当前设备上的本地版本覆盖服务端版本。',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('取消'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('确定'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok != true || !context.mounted) return;
+                        final success = await provider
+                            .promoteConflictMomentForUpload(record.id);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              success ? '已改为待上传，下一次同步会保留本地版本' : '处理失败',
+                            ),
+                          ),
+                        );
+                      },
+                icon: const Icon(Icons.upload_outlined),
+                label: const Text('保留本地版本'),
+              ),
+              OutlinedButton.icon(
+                onPressed: provider.isSyncing
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('使用云端版本'),
+                            content: const Text(
+                              '确定使用服务端最新版本覆盖当前这条本地冲突记录吗？这条记录的本地未上传改动将被丢弃。',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('取消'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('确定'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok != true || !context.mounted) return;
+                        final success =
+                            await provider.resolveConflictMomentWithRemote(
+                          record.id,
+                        );
+                        if (!context.mounted) return;
+                        final message = success
+                            ? '已使用云端版本覆盖当前记录'
+                            : (provider.lastFetchError ?? '处理失败');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(message)),
+                        );
+                      },
+                icon: const Icon(Icons.cloud_sync_outlined),
+                label: const Text('使用云端版本'),
+              ),
+            ],
           ),
         ],
       ),
@@ -199,11 +397,19 @@ class _MediaTypeChip extends StatelessWidget {
         break;
     }
 
-    return Chip(
-      avatar: Icon(icon, size: 18, color: color),
-      label: Text(label),
-      backgroundColor: color.withOpacity(0.1),
-      labelStyle: TextStyle(color: color),
+    return LiquidGlassPill(
+      tintColor: color.withOpacity(0.14),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -264,11 +470,11 @@ class _MediaContent extends StatelessWidget {
         );
       case MediaType.mixed:
         // 混合类型需要根据文件扩展名判断
-        if (path.endsWith('.jpg') || path.endsWith('.png') || path.endsWith('.jpeg') || path.endsWith('.gif')) {
+        if (isImageMediaPath(path)) {
           return _ImageViewer(path: path);
-        } else if (path.endsWith('.mp3') || path.endsWith('.m4a') || path.endsWith('.aac')) {
+        } else if (isAudioMediaPath(path)) {
           return _AudioPlayer(path: path, audioPlayer: audioPlayer);
-        } else if (path.endsWith('.mp4') || path.endsWith('.mov') || path.endsWith('.avi')) {
+        } else if (isVideoMediaPath(path)) {
           return _VideoPlayer(
             path: path,
             controller: videoController,
@@ -291,22 +497,40 @@ class _ImageViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = resolveMediaUrl(path);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.file(
-        File(path),
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            height: 200,
-            color: Colors.grey[200],
-            child: const Center(
-              child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
+      borderRadius: BorderRadius.circular(18),
+      child: isLocalMediaPath(path)
+          ? Image.file(
+              File(path),
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 200,
+                  color: Colors.grey[200],
+                  child: const Center(
+                    child:
+                        Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                  ),
+                );
+              },
+            )
+          : Image.network(
+              imageUrl,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 200,
+                  color: Colors.grey[200],
+                  child: const Center(
+                    child:
+                        Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }
@@ -354,12 +578,8 @@ class _AudioPlayerState extends State<_AudioPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return LiquidGlassCard(
+      tintColor: const Color(0xFFFFE6C7),
       child: Column(
         children: [
           Row(
@@ -370,7 +590,14 @@ class _AudioPlayerState extends State<_AudioPlayer> {
                   if (_isPlaying) {
                     await widget.audioPlayer.pause();
                   } else {
-                    await widget.audioPlayer.play(DeviceFileSource(widget.path));
+                    if (isLocalMediaPath(widget.path)) {
+                      await widget.audioPlayer
+                          .play(DeviceFileSource(widget.path));
+                    } else {
+                      await widget.audioPlayer.play(
+                        UrlSource(resolveMediaUrl(widget.path)),
+                      );
+                    }
                   }
                   if (mounted) {
                     setState(() => _isPlaying = !_isPlaying);
@@ -443,7 +670,10 @@ class _VideoPlayerState extends State<_VideoPlayer> {
     if (!widget.isInitialized || widget.controller == null) {
       return Container(
         height: 200,
-        color: Colors.black,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: const Center(
           child: CircularProgressIndicator(color: Colors.white),
         ),
@@ -451,7 +681,7 @@ class _VideoPlayerState extends State<_VideoPlayer> {
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(18),
       child: GestureDetector(
         onTap: () {
           setState(() {

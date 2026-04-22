@@ -23,12 +23,14 @@ func NewUserService() *UserService {
 
 // UserResponse 用户响应
 type UserResponse struct {
-	ID        uint64 `json:"id"`
-	Username  string `json:"username"`
-	Nickname  string `json:"nickname"`
-	AvatarURL string `json:"avatar_url"`
-	Status    int8   `json:"status"`
-	CreatedAt string `json:"created_at"`
+	ID              uint64   `json:"id"`
+	Username        string   `json:"username"`
+	Nickname        string   `json:"nickname"`
+	AvatarURL       string   `json:"avatar_url"`
+	Status          int8     `json:"status"`
+	CreatedAt       string   `json:"created_at"`
+	Roles           []string `json:"roles,omitempty"`
+	PermissionCodes []string `json:"permission_codes,omitempty"`
 }
 
 // UpdateUserRequest 更新用户请求
@@ -39,8 +41,8 @@ type UpdateUserRequest struct {
 
 // StatsResponse 统计响应
 type StatsResponse struct {
-	Total   int64              `json:"total"`
-	ByType  map[string]int64   `json:"by_type"`
+	Total  int64            `json:"total"`
+	ByType map[string]int64 `json:"by_type"`
 }
 
 // GetCurrentUser 获取当前用户
@@ -119,4 +121,43 @@ func (s *UserService) GetStats(userID uint64) (*StatsResponse, error) {
 		Total:  total,
 		ByType: byTypeStr,
 	}, nil
+}
+
+// GetAdminProfile 获取管理员资料（含角色和权限码）
+func (s *UserService) GetAdminProfile(userID uint64) (*UserResponse, error) {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	resp := &UserResponse{
+		ID:        user.ID,
+		Username:  user.Username,
+		Nickname:  user.Nickname,
+		AvatarURL: user.AvatarURL,
+		Status:    user.Status,
+		CreatedAt: user.CreatedAt.Format("2006-01-02 15:04:05"),
+	}
+
+	roles, err := s.userRepo.GetUserRoles(userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(roles) > 0 {
+		resp.Roles = make([]string, 0, len(roles))
+		for _, role := range roles {
+			resp.Roles = append(resp.Roles, role.Code)
+		}
+	}
+
+	codes, err := s.userRepo.GetUserPermissionCodes(userID)
+	if err != nil {
+		return nil, err
+	}
+	resp.PermissionCodes = codes
+
+	return resp, nil
 }

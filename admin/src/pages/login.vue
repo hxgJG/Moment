@@ -57,6 +57,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminLogin } from '../api/login'
 import { useAdminStore } from '../stores/admin'
+import { firstAccessibleAdminPath } from '../constants/admin-menu'
 
 const router = useRouter()
 const adminStore = useAdminStore()
@@ -85,7 +86,10 @@ async function handleLogin() {
     adminStore.setTokens(res.data.token, res.data.refresh_token)
     adminStore.setUser(res.data.user)
     ElMessage.success('登录成功')
-    router.push('/')
+    router.push(
+      firstAccessibleAdminPath((permission) => adminStore.hasPermission(permission)) ||
+        '/'
+    )
   } catch (error) {
     console.error('登录失败:', error)
   } finally {

@@ -23,7 +23,7 @@
       <template #header>
         <div class="card-header">
           <span>用户列表</span>
-          <el-button type="primary" @click="handleAdd">
+          <el-button v-if="canManageUsers" type="primary" @click="handleAdd">
             <el-icon><Plus /></el-icon>
             新增用户
           </el-button>
@@ -44,12 +44,23 @@
         <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link @click="handleViewMoments(row)">查看时光</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="warning" link @click="handleToggleStatus(row)">
+            <el-button
+              v-if="canViewMoments"
+              type="success"
+              link
+              @click="handleViewMoments(row)"
+            >
+              查看时光
+            </el-button>
+            <el-button v-if="canManageUsers" type="primary" link @click="handleEdit(row)">
+              编辑
+            </el-button>
+            <el-button v-if="canManageUsers" type="warning" link @click="handleToggleStatus(row)">
               {{ row.status === 1 ? '禁用' : '启用' }}
             </el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canManageUsers" type="danger" link @click="handleDelete(row)">
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -105,8 +116,10 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserList, createUser, updateUser, deleteUser, toggleUserStatus } from '../api/user'
+import { useAdminStore } from '../stores/admin'
 
 const router = useRouter()
+const adminStore = useAdminStore()
 
 const loading = ref(false)
 const tableData = ref([])
@@ -138,6 +151,8 @@ const formRules = {
 }
 
 const dialogTitle = computed(() => (form.id ? '编辑用户' : '新增用户'))
+const canManageUsers = computed(() => adminStore.hasPermission('system:user'))
+const canViewMoments = computed(() => adminStore.hasPermission('moment:list'))
 
 function handleViewMoments(row) {
   router.push({ path: '/moments', query: { user_id: String(row.id) } })

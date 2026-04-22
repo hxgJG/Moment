@@ -10,7 +10,13 @@ import (
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authService *service.AuthService
+	authService authService
+}
+
+type authService interface {
+	Register(req *service.RegisterRequest) (*service.TokenResponse, error)
+	Login(req *service.LoginRequest) (*service.TokenResponse, error)
+	RefreshToken(req *service.RefreshRequest) (*service.TokenResponse, error)
 }
 
 // NewAuthHandler 创建认证处理器

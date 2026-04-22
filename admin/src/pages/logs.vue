@@ -44,7 +44,7 @@
         <el-table-column prop="username" label="操作用户" width="120" />
         <el-table-column prop="module" label="模块" width="100">
           <template #default="{ row }">
-            <el-tag size="small">{{ row.module }}</el-tag>
+            <el-tag size="small">{{ getModuleLabel(row.module) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="action" label="动作" width="100" />
@@ -69,6 +69,11 @@
         </el-table-column>
         <el-table-column prop="duration" label="耗时(ms)" width="100" />
         <el-table-column prop="created_at" label="操作时间" width="180" />
+        <el-table-column label="操作" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="openDetail(row)">详情</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-pagination
@@ -82,6 +87,31 @@
         @current-change="loadData"
       />
     </el-card>
+
+    <el-drawer
+      v-model="drawerVisible"
+      title="日志详情"
+      size="520px"
+      destroy-on-close
+    >
+      <template v-if="detailRow">
+        <p class="detail-meta">用户：{{ detailRow.username || '-' }}</p>
+        <p class="detail-meta">
+          模块：{{ getModuleLabel(detailRow.module) }} · 动作：{{ detailRow.action }}
+        </p>
+        <p class="detail-meta">
+          请求：{{ detailRow.method }} {{ detailRow.path }}
+        </p>
+        <p class="detail-meta">
+          状态：{{ detailRow.status }} · 耗时：{{ detailRow.duration }} ms
+        </p>
+        <p class="detail-meta">IP：{{ detailRow.ip || '-' }}</p>
+        <p class="detail-meta">时间：{{ detailRow.created_at }}</p>
+
+        <el-divider content-position="left">请求参数</el-divider>
+        <pre class="detail-block">{{ formatParams(detailRow.params) }}</pre>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -92,6 +122,8 @@ import { getOperationLogList } from '../api/log'
 const loading = ref(false)
 const tableData = ref([])
 const dateRange = ref([])
+const drawerVisible = ref(false)
+const detailRow = ref(null)
 
 const searchForm = reactive({
   username: '',
@@ -113,6 +145,38 @@ function getMethodType(method) {
     PATCH: 'info'
   }
   return map[method] || ''
+}
+
+function getModuleLabel(module) {
+  const map = {
+    user: '用户管理',
+    role: '角色管理',
+    permission: '权限管理',
+    moment: '时光管理',
+    system: '系统'
+  }
+  return map[module] || module || '-'
+}
+
+function openDetail(row) {
+  detailRow.value = row
+  drawerVisible.value = true
+}
+
+function formatParams(raw) {
+  if (!raw) {
+    return '无'
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length === 0) {
+      return '无'
+    }
+    return JSON.stringify(parsed, null, 2)
+  } catch (_) {
+    return raw
+  }
 }
 
 async function loadData() {
@@ -177,5 +241,23 @@ onMounted(() => {
 .pagination {
   margin-top: 16px;
   justify-content: flex-end;
+}
+
+.detail-meta {
+  margin: 0 0 10px;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.detail-block {
+  margin: 0;
+  padding: 12px;
+  background: #f6f8fa;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #303133;
 }
 </style>
